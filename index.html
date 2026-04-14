@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f5f0e8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Voyage" />
+  <title>Mon Planning Voyage</title>
+  <link rel="manifest" href="manifest.json" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; background: #f5f0e8; overscroll-behavior: none; }
+    #root { height: 100%; }
+    ::-webkit-scrollbar { display: none; }
+    input, textarea, button, label { font-family: inherit; }
+    input[type="range"] { accent-color: #c4622a; }
+    input[type="date"] { color-scheme: light; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+    }
+  </script>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    const KEY   = "tripplanner_v3";
+    const SKEY  = "tripplanner_settings";
+    const DEF   = { name: "Mon Voyage", startDate: "", endDate: "", days: [], cards: [] };
+    const DEF_S = { previewLines: 2, fontSize: 14 };
+
+    const uid   = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const load  = () => { try { const s = localStorage.getItem(KEY);  return s ? JSON.parse(s) : DEF;          } catch { return DEF;   } };
+    const loadS = () => { try { const s = localStorage.getItem(SKEY); return s ? {...DEF_S,...JSON.parse(s)} : DEF_S; } catch { return DEF_S; } };
+
+    const C = {
+      bg:       "#f5f0e8",
+      surface:  "#ffffff",
+      surface2: "#faf7f2",
+      border:   "#e2d9cc",
+      border2:  "#cdc3b4",
+      accent:   "#c4622a",
+      accent2:  "#2a7fa8",
+      text:     "#2c2418",
+      muted:    "#8a7e6e",
+      danger:   "#b83030",
+      font:     "'DM Sans', sans-serif",
+      serif:    "'Lora', serif",
+    };
+
+    const fmtLong  = (iso) => iso ? new Intl.DateTimeFormat("fr-FR", { weekday:"long", day:"numeric", month:"long" }).format(new Date(iso+"T12:00:00")) : "";
+    const fmtShort = (iso) => iso ? new Intl.DateTimeFormat("fr-FR", { day:"numeric", month:"short" }).format(new Date(iso+"T12:00:00")) : "";
+    const fmtNum   = (iso) => iso ? new Date(iso+"T12:00:00").getDate() : "—";
+    const fmtMon   = (iso) => iso ? new Intl.DateTimeFormat("fr-FR", { month:"short" }).format(new Date(iso+"T12:00:00")) : "";
+    const fmtInit  = (iso) => iso ? new Intl.DateTimeFormat("fr-FR", { weekday:"long" }).format(new Date(iso+"T12:00:00")).charAt(0).toUpperCase() : "";
+
+    const buildDays = (s, e) => {
+      const days = []; const start = new Date(s+"T12:00:00"); const end = new Date(e+"T12:00:00");
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1))
+        days.push({ id: uid(), date: d.toISOString().split("T")[0], planning: "", notes: "" });
+      return days;
+    };
+
+    /* ── Markdown + URL inline parser ──
+       Supports: **bold**, *italic*, # heading (slightly larger), https://... links
+    */
+    const COLORS = {
+      r: "#c0392b",
+      o: "#e07b2a",
+      b: "#2a7fa8",
+      v: "#27ae60",
+      f: "#d4006a",
+      m: "#6c3483",
+      t: "#00897b",
+      d: "#c49a00",
+    };
+
+    const parseInline = (text) => {
+      const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(__(.*?)__)|\{([romvftbd]):(.+?)\}|(https?:\/\/[^\s]+)/g;
+      const parts = []; let last = 0; let match;
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > last) parts.push({ t:"text",   v:text.slice(last, match.index) });
+        if      (match[1]) parts.push({ t:"bold",      v:match[2] });
+        else if (match[3]) parts.push({ t:"italic",    v:match[4] });
+        else if (match[5]) parts.push({ t:"underline", v:match[6] });
+        else if (match[7]) parts.push({ t:"color",     v:match[8], color: COLORS[match[7]] });
+        else if (match[9]) parts.push({ t:"url",       v:match[9] });
+        last = match.index + match[0].length;
+      }
+      if (last < text.length) parts.push({ t:"text", v:text.slice(last) });
+      return parts;
+    };
+
+    const renderInline = (text, baseColor) => parseInline(text).map((p, i) => {
+      if (p.t==="bold")      return <strong key={i} style={{ fontWeight:600, color:baseColor }}>{p.v}</strong>;
+      if (p.t==="italic")    return <em      key={i} style={{ fontStyle:"italic" }}>{p.v}</em>;
+      if (p.t==="underline") return <span    key={i} style={{ textDecoration:"underline" }}>{p.v}</span>;
+      if (p.t==="color")     return <span    key={i} style={{ color:p.color }}>{renderInline(p.v, p.color)}</span>;
+      if (p.t==="url")       return <a key={i} href={p.v} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ color:C.accent2, textDecoration:"underline", wordBreak:"break-all" }}>{p.v}</a>;
+      return <span key={i}>{p.v}</span>;
+    });
+
+    const renderBlock = (text, fontSize, withBullets=false) => {
+      if (!text) return null;
+      return text.split("\n").filter(Boolean).map((line, i) => {
+        const isHeading = line.startsWith("# ");
+        const content   = isHeading ? line.slice(2) : line;
+        const fs        = isHeading ? fontSize + 2 : fontSize;
+        const color     = isHeading ? C.accent : C.text;
+        const weight    = isHeading ? 600 : 400;
+        const ff        = isHeading ? C.serif : C.font;
+        const mb        = isHeading ? 5 : withBullets ? 5 : 3;
+
+        if (withBullets && !isHeading) {
+          return (
+            <div key={i} style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:mb }}>
+              <div style={{ width:4, height:4, borderRadius:"50%", background:C.accent2, flexShrink:0, marginTop:6 }}/>
+              <div style={{ fontSize:fs, color, fontWeight:weight, fontFamily:ff, lineHeight:1.65 }}>{renderInline(content, color)}</div>
+            </div>
+          );
+        }
+        return (
+          <div key={i} style={{ fontSize:fs, color, fontWeight:weight, fontFamily:ff, lineHeight:1.7, marginBottom:mb }}>{renderInline(content, color)}</div>
+        );
+      });
+    };
+
+    /* ════════════════════════════════════════════════════════════ */
+    function App() {
+      const [data, setData]           = useState(load);
+      const [settings, setSettings]   = useState(loadS);
+      const [tab, setTab]             = useState("days");
+      const [syncing, setSyncing]     = useState(false);
+      const [expandedId, setExpanded] = useState(null);
+      const [modal, setModal]         = useState(null);
+      const [form,  setForm]          = useState({});
+      const [swapFor, setSwapFor]     = useState(null);
+      const [toast, setToast]         = useState(null);
+      const [showSettings, setShowSettings] = useState(false);
+
+      const save = (nd) => {
+        setData(nd); setSyncing(true);
+        try { localStorage.setItem(KEY, JSON.stringify(nd)); } catch {}
+        setTimeout(() => setSyncing(false), 800);
+      };
+      const saveSettings = (ns) => {
+        setSettings(ns);
+        try { localStorage.setItem(SKEY, JSON.stringify(ns)); } catch {}
+      };
+      const showToast = (m) => { setToast(m); setTimeout(() => setToast(null), 3000); };
+
+      const exportData = () => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)], { type:"application/json" }));
+        a.download = (data.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()||"voyage")+".json";
+        a.click();
+      };
+      const importData = (e) => {
+        const f = e.target.files[0]; if (!f) return;
+        const r = new FileReader();
+        r.onload = (ev) => {
+          try { const p=JSON.parse(ev.target.result); if(!Array.isArray(p.days)||!Array.isArray(p.cards)) throw 0; save(p); showToast("Planning importé ✅"); }
+          catch { showToast("Fichier invalide ❌"); }
+        };
+        r.readAsText(f); e.target.value="";
+      };
+
+      const openModal = (type, item=null) => {
+        setModal({ type, item });
+        if (type==="day")  setForm(item ? {...item} : { date:"", planning:"", notes:"" });
+        if (type==="card") setForm(item ? {...item} : { title:"", content:"" });
+        if (type==="trip") setForm({ name:data.name, startDate:data.startDate||"", endDate:data.endDate||"" });
+      };
+      const closeModal = () => { setModal(null); setForm({}); };
+
+      const saveDay  = () => { const days  = modal.item ? data.days.map(d=>d.id===modal.item.id?{...d,...form}:d)  : [...data.days, {id:uid(),...form}];  save({...data,days});  closeModal(); };
+      const saveCard = () => { const cards = modal.item ? data.cards.map(c=>c.id===modal.item.id?{...c,...form}:c) : [...data.cards,{id:uid(),...form}]; save({...data,cards}); closeModal(); };
+      const saveTrip = () => { save({...data,name:form.name,startDate:form.startDate,endDate:form.endDate}); closeModal(); };
+
+      const generateDays = () => {
+        if (!form.startDate||!form.endDate) { showToast("⚠️ Indique les deux dates."); return; }
+        const fresh  = buildDays(form.startDate, form.endDate);
+        const merged = fresh.map(nd => data.days.find(d=>d.date===nd.date) || nd);
+        save({...data, name:form.name, startDate:form.startDate, endDate:form.endDate, days:merged});
+        closeModal(); showToast(`✨ ${merged.length} jours générés !`);
+      };
+
+      const deleteDay  = (id) => { save({...data, days: data.days.filter(d=>d.id!==id)});   closeModal(); };
+      const deleteCard = (id) => { save({...data, cards:data.cards.filter(c=>c.id!==id)}); closeModal(); };
+      const moveDay  = (id,dir) => { const a=[...data.days];  const i=a.findIndex(d=>d.id===id); const ni=i+dir; if(ni<0||ni>=a.length)return; [a[i],a[ni]]=[a[ni],a[i]]; save({...data,days:a});  };
+      const moveCard = (id,dir) => { const a=[...data.cards]; const i=a.findIndex(c=>c.id===id); const ni=i+dir; if(ni<0||ni>=a.length)return; [a[i],a[ni]]=[a[ni],a[i]]; save({...data,cards:a}); };
+
+      const startSwap = (id) => { setSwapFor(id); setExpanded(null); };
+      const doSwap = (targetId) => {
+        const src = data.days.find(d=>d.id===swapFor);
+        const tgt = data.days.find(d=>d.id===targetId);
+        const days = data.days.map(d => {
+          if (d.id===swapFor)  return {...d, planning:tgt.planning, notes:tgt.notes};
+          if (d.id===targetId) return {...d, planning:src.planning, notes:src.notes};
+          return d;
+        });
+        save({...data,days}); setSwapFor(null); showToast("↔ Contenu échangé !");
+      };
+
+      const tripLabel = data.startDate && data.endDate ? `${fmtShort(data.startDate)} – ${fmtShort(data.endDate)}` : null;
+      const safeTop   = "max(20px, env(safe-area-inset-top))";
+      const safeBot   = "max(24px, env(safe-area-inset-bottom))";
+
+      return (
+        <div style={{ fontFamily:C.font, background:C.bg, minHeight:"100svh", color:C.text, maxWidth:480, margin:"0 auto", display:"flex", flexDirection:"column" }}>
+
+          {/* ── Header ── */}
+          <div style={{ paddingTop:safeTop, paddingLeft:20, paddingRight:20, background:C.bg, position:"sticky", top:0, zIndex:10, borderBottom:`1px solid ${C.border}` }}>
+            <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", paddingBottom:12 }}>
+              <div onClick={()=>openModal("trip")} style={{ cursor:"pointer", flex:1, minWidth:0 }}>
+                <div style={{ fontFamily:C.serif, fontSize:21, fontWeight:600, color:C.text, lineHeight:1.15, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:10 }}>{data.name}</div>
+                {tripLabel && <div style={{ fontSize:12, color:C.accent, marginTop:2, fontWeight:500 }}>{tripLabel} · {data.days.length} jours</div>}
+                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>Toucher pour modifier</div>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:7, flexShrink:0, paddingTop:2 }}>
+                <div style={{ fontSize:11, color:syncing ? C.accent : C.muted }}>{syncing ? "⟳ Sync..." : "✓ Sauvegardé"}</div>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button onClick={()=>setShowSettings(true)} style={{ padding:"5px 10px", borderRadius:8, background:C.surface, border:`1px solid ${C.border2}`, color:C.muted, fontSize:12, cursor:"pointer" }}>⚙️</button>
+                  <button onClick={exportData} style={{ padding:"5px 11px", borderRadius:8, background:C.accent, border:"none", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>📤 Export</button>
+                  <label style={{ padding:"5px 11px", borderRadius:8, background:C.accent2, border:"none", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                    📥 Import<input type="file" accept=".json" onChange={importData} style={{ display:"none" }}/>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display:"flex", marginBottom:-1 }}>
+              {[["days","📅 Programme"],["cards","📋 Infos voyage"]].map(([id,label])=>(
+                <button key={id} onClick={()=>setTab(id)} style={{ flex:1, padding:"10px 0 11px", background:"none", border:"none", cursor:"pointer", color:tab===id?C.accent:C.muted, fontSize:13, fontWeight:tab===id?600:400, borderBottom:tab===id?`2px solid ${C.accent}`:"2px solid transparent" }}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Swap banner ── */}
+          {swapFor && (
+            <div style={{ background:`${C.accent2}15`, borderBottom:`1px solid ${C.accent2}40`, padding:"10px 20px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ fontSize:13, color:C.accent2, fontWeight:500 }}>↔ Choisis le jour à échanger avec <strong>{fmtShort(data.days.find(d=>d.id===swapFor)?.date)}</strong></div>
+              <button onClick={()=>setSwapFor(null)} style={{ background:"none", border:"none", color:C.muted, fontSize:16, cursor:"pointer" }}>✕</button>
+            </div>
+          )}
+
+          {/* ── Content ── */}
+          <div style={{ flex:1, padding:"14px 14px", paddingBottom:`calc(72px + ${safeBot})` }}>
+            {tab==="days" && (
+              data.days.length===0
+                ? <Empty icon="✈️" text="Aucun jour planifié" sub="Ouvre 'Modifier' et génère les jours depuis les dates du voyage"/>
+                : data.days.map((day,i)=>(
+                    <DayCard key={day.id} day={day} index={i} total={data.days.length}
+                      expanded={expandedId===day.id}
+                      swapMode={!!swapFor} isSwapSource={swapFor===day.id}
+                      previewLines={settings.previewLines} fontSize={settings.fontSize}
+                      onToggle={()=>{ if(swapFor&&swapFor!==day.id){doSwap(day.id);}else{setExpanded(expandedId===day.id?null:day.id);}}}
+                      onEdit={()=>openModal("day",day)}
+                      onMove={dir=>moveDay(day.id,dir)}
+                      onSwap={()=>startSwap(day.id)}/>
+                  ))
+            )}
+            {tab==="cards" && (
+              data.cards.length===0
+                ? <Empty icon="📋" text="Aucune info ajoutée" sub="Hôtel, réservations, arrival card, liens utiles..."/>
+                : data.cards.map((card,i)=>(
+                    <InfoCard key={card.id} card={card} index={i} total={data.cards.length}
+                      onEdit={()=>openModal("card",card)}
+                      onMove={dir=>moveCard(card.id,dir)}/>
+                  ))
+            )}
+          </div>
+
+          {/* ── FAB ── */}
+          <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{ position:"fixed", bottom:`calc(16px + ${safeBot})`, right:"max(16px, calc(50vw - 226px))", width:52, height:52, borderRadius:"50%", background:C.accent, border:"none", cursor:"pointer", fontSize:26, color:"#fff", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`0 3px 14px ${C.accent}66`, zIndex:20 }}>+</button>
+
+          {/* ── Toast ── */}
+          {toast && <div style={{ position:"fixed", top:`calc(12px + ${safeTop})`, left:"50%", transform:"translateX(-50%)", background:C.text, borderRadius:10, padding:"10px 18px", fontSize:13, color:"#fff", zIndex:100, whiteSpace:"nowrap", boxShadow:"0 4px 20px rgba(0,0,0,0.2)" }}>{toast}</div>}
+
+          {/* ── Settings ── */}
+          {showSettings && <SettingsPanel settings={settings} onChange={saveSettings} onClose={()=>setShowSettings(false)} safeBot={safeBot}/>}
+
+          {/* ── Modal ── */}
+          {modal && <EditModal modal={modal} form={form} setForm={setForm} onClose={closeModal} onSaveDay={saveDay} onSaveCard={saveCard} onSaveTrip={saveTrip} onGenerateDays={generateDays} onDeleteDay={deleteDay} onDeleteCard={deleteCard} safeBot={safeBot}/>}
+        </div>
+      );
+    }
+
+    /* ════════════════════════════════════════════════════════════ */
+    function Empty({ icon, text, sub }) {
+      return (
+        <div style={{ textAlign:"center", padding:"60px 20px", color:C.muted }}>
+          <div style={{ fontSize:34, marginBottom:12 }}>{icon}</div>
+          <div style={{ fontSize:15, marginBottom:6, color:C.text }}>{text}</div>
+          <div style={{ fontSize:13 }}>{sub}</div>
+        </div>
+      );
+    }
+
+    /* ════════════════════════════════════════════════════════════ */
+    function DayCard({ day, index, total, expanded, swapMode, isSwapSource, previewLines, fontSize, onToggle, onEdit, onMove, onSwap }) {
+      const allLines   = (day.planning||"").split("\n").filter(Boolean);
+      const hasPlan    = allLines.length > 0;
+      const hasNotes   = !!day.notes?.trim();
+      const swapTarget = swapMode && !isSwapSource;
+
+      /* Preview: pass raw lines so # heading renders with proper style */
+      const previewContent = allLines.slice(0, previewLines).join("\n");
+
+      const borderLeft = isSwapSource ? `3px solid ${C.accent}` : swapTarget ? `3px solid ${C.accent2}` : `3px solid transparent`;
+
+      return (
+        <div style={{ marginBottom:12, borderRadius:12, background:C.surface, border:`1px solid ${swapTarget?C.accent2:C.border}`, borderLeft, overflow:"hidden", transition:"all 0.15s", boxShadow:"0 2px 8px rgba(0,0,0,0.07)" }}>
+          <div onClick={onToggle} style={{ display:"flex", alignItems:"stretch", cursor:"pointer" }}>
+
+            {/* Date badge — distinct background column */}
+            <div style={{ width:52, flexShrink:0, background:C.surface2, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"12px 0", gap:1 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:0.8, textTransform:"uppercase" }}>{fmtInit(day.date)}</div>
+              <div style={{ fontFamily:C.serif, fontWeight:600, color:isSwapSource?C.accent:swapTarget?C.accent2:C.accent, fontSize:26, lineHeight:1.05 }}>{fmtNum(day.date)}</div>
+              <div style={{ fontSize:9, color:C.muted, textTransform:"lowercase" }}>{fmtMon(day.date)}</div>
+            </div>
+
+            {/* Preview */}
+            <div style={{ flex:1, minWidth:0, padding:"12px 12px 12px 14px", display:"flex", flexDirection:"column", justifyContent:"center" }}>
+              {!expanded && hasPlan
+                ? <div>{renderBlock(previewContent, fontSize, false)}</div>
+                : !expanded && <div style={{ fontSize:fontSize-1, color:C.muted, fontStyle:"italic", lineHeight:1.55 }}>Journée vide</div>
+              }
+              {expanded && <div style={{ fontSize:12, color:C.muted, textTransform:"capitalize" }}>{fmtLong(day.date)}</div>}
+            </div>
+
+            {/* Dots + chevron */}
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:4, padding:"0 12px", flexShrink:0 }}>
+              <div style={{ display:"flex", gap:4 }}>
+                {hasPlan  && <div style={{ width:5, height:5, borderRadius:"50%", background:C.accent }}/>}
+                {hasNotes && <div style={{ width:5, height:5, borderRadius:"50%", background:C.accent2 }}/>}
+              </div>
+              <div style={{ color:C.muted, fontSize:10 }}>{expanded?"▲":"▼"}</div>
+            </div>
+          </div>
+
+          {swapTarget && <div style={{ padding:"0 14px 10px 66px", fontSize:12, color:C.accent2, fontStyle:"italic" }}>Toucher pour échanger le contenu</div>}
+
+          {expanded && !swapMode && (
+            <div style={{ borderTop:`1px solid ${C.border}`, padding:"14px 16px 14px", background:C.surface2 }}>
+
+              {hasPlan
+                ? <div style={{ marginBottom:14 }}>
+                    <div style={{ fontSize:10, textTransform:"uppercase", letterSpacing:1.2, color:C.accent, marginBottom:10, fontWeight:600 }}>Programme</div>
+                    <div>{renderBlock(day.planning, fontSize, false)}</div>
+                  </div>
+                : <div style={{ fontSize:13, color:C.muted, fontStyle:"italic", marginBottom:14 }}>Aucun programme saisi</div>
+              }
+
+              {hasNotes && (
+                <div style={{ marginBottom:14, padding:"12px 14px", background:`${C.accent2}0c`, borderRadius:10, border:`1px solid ${C.accent2}28` }}>
+                  <div style={{ fontSize:10, textTransform:"uppercase", letterSpacing:1.2, color:C.accent2, marginBottom:10, fontWeight:600 }}>Infos pratiques</div>
+                  <div>{renderBlock(day.notes, fontSize, true)}</div>
+                </div>
+              )}
+
+              <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                <button onClick={onEdit}  style={{ flex:1, padding:"9px 0", borderRadius:9, background:`${C.accent}12`, border:`1px solid ${C.accent}30`, color:C.accent, fontSize:13, cursor:"pointer", fontWeight:500 }}>✏️ Modifier</button>
+                <button onClick={onSwap}  style={{ flex:1, padding:"9px 0", borderRadius:9, background:`${C.accent2}12`, border:`1px solid ${C.accent2}30`, color:C.accent2, fontSize:13, cursor:"pointer", fontWeight:500 }}>↔ Échanger</button>
+                <button onClick={()=>onMove(-1)} disabled={index===0}       style={{ width:36, borderRadius:9, background:C.surface, border:`1px solid ${C.border}`, color:index===0?C.border:C.muted, fontSize:14, cursor:index===0?"default":"pointer" }}>↑</button>
+                <button onClick={()=>onMove(1)}  disabled={index===total-1} style={{ width:36, borderRadius:9, background:C.surface, border:`1px solid ${C.border}`, color:index===total-1?C.border:C.muted, fontSize:14, cursor:index===total-1?"default":"pointer" }}>↓</button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ════════════════════════════════════════════════════════════ */
+    function InfoCard({ card, index, total, onEdit, onMove }) {
+      const [open, setOpen] = useState(false);
+      const preview = (card.content||"").split("\n").filter(Boolean)[0]
+        ?.replace(/^# /,"")
+        .replace(/\*\*(.+?)\*\*/g,"$1")
+        .replace(/\*(.+?)\*/g,"$1")
+        .replace(/__(.*?)__/g,"$1")
+        .replace(/\{[romvftbd]:(.+?)\}/g,"$1") || "";
+      return (
+        <div style={{ marginBottom:12, borderRadius:12, background:C.surface, border:`1px solid ${C.border}`, overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,0.07)" }}>
+          <div onClick={()=>setOpen(!open)} style={{ padding:"13px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}>
+            <div style={{ width:36, height:36, borderRadius:9, flexShrink:0, background:`${C.accent2}12`, border:`1px solid ${C.accent2}28`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>📋</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontWeight:500, fontSize:14, color:C.text }}>{card.title||"Sans titre"}</div>
+              {!open && preview && <div style={{ fontSize:12, color:C.muted, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{preview}</div>}
+            </div>
+            <div style={{ color:C.muted, fontSize:10 }}>{open?"▲":"▼"}</div>
+          </div>
+          {open && (
+            <div style={{ borderTop:`1px solid ${C.border}`, padding:"14px 16px 14px", background:C.surface2 }}>
+              <div style={{ marginBottom:14 }}>{renderBlock(card.content, 14, true)}</div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={onEdit} style={{ flex:1, padding:"9px 0", borderRadius:9, background:`${C.accent2}12`, border:`1px solid ${C.accent2}30`, color:C.accent2, fontSize:13, cursor:"pointer", fontWeight:500 }}>✏️ Modifier</button>
+                <button onClick={()=>onMove(-1)} disabled={index===0}       style={{ width:36, borderRadius:9, background:C.surface, border:`1px solid ${C.border}`, color:index===0?C.border:C.muted, fontSize:14, cursor:index===0?"default":"pointer" }}>↑</button>
+                <button onClick={()=>onMove(1)}  disabled={index===total-1} style={{ width:36, borderRadius:9, background:C.surface, border:`1px solid ${C.border}`, color:index===total-1?C.border:C.muted, fontSize:14, cursor:index===total-1?"default":"pointer" }}>↓</button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ════════════════════════════════════════════════════════════ */
+    function SettingsPanel({ settings, onChange, onClose, safeBot }) {
+      const lbl = { fontSize:13, color:C.text, fontWeight:500 };
+      const val = { fontSize:13, color:C.accent, fontWeight:600, minWidth:28, textAlign:"right" };
+      return (
+        <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.35)", zIndex:50, display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
+          <div style={{ background:C.surface, borderRadius:"20px 20px 0 0", border:`1px solid ${C.border}`, padding:`16px 20px calc(${safeBot} + 20px)` }}>
+            <div style={{ width:36, height:4, background:C.border, borderRadius:2, margin:"0 auto 20px" }}/>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+              <div style={{ fontFamily:C.serif, fontSize:18, fontWeight:600, color:C.text }}>Affichage des tuiles</div>
+              <button onClick={onClose} style={{ background:"none", border:"none", color:C.muted, fontSize:22, cursor:"pointer" }}>✕</button>
+            </div>
+
+            <div style={{ marginBottom:24 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+                <span style={lbl}>Lignes de programme visibles</span>
+                <span style={val}>{settings.previewLines}</span>
+              </div>
+              <input type="range" min="1" max="6" step="1" value={settings.previewLines} onChange={e=>onChange({...settings,previewLines:parseInt(e.target.value)})} style={{ width:"100%" }}/>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginTop:4 }}><span>1</span><span>6</span></div>
+            </div>
+
+            <div style={{ marginBottom:24 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+                <span style={lbl}>Taille du texte</span>
+                <span style={val}>{settings.fontSize}px</span>
+              </div>
+              <input type="range" min="11" max="17" step="1" value={settings.fontSize} onChange={e=>onChange({...settings,fontSize:parseInt(e.target.value)})} style={{ width:"100%" }}/>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginTop:4 }}><span>Petit</span><span>Grand</span></div>
+            </div>
+
+            {/* Aperçu */}
+            <div style={{ padding:"12px 14px", borderRadius:10, background:C.surface2, border:`1px solid ${C.border}` }}>
+              <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", letterSpacing:1, marginBottom:8 }}>Aperçu markdown</div>
+              <div style={{ fontSize:settings.fontSize+2, fontFamily:C.serif, fontWeight:600, color:C.accent, marginBottom:4 }}>Matin</div>
+              <div style={{ fontSize:settings.fontSize, color:C.text, lineHeight:1.65, marginBottom:2 }}>08h00 <strong style={{fontWeight:600}}>Petit déjeuner</strong> à l'hôtel</div>
+              <div style={{ fontSize:settings.fontSize, color:C.muted, lineHeight:1.65 }}>09h30 Départ pour <em>Disneyland</em></div>
+            </div>
+
+            <div style={{ marginTop:16, padding:"10px 14px", borderRadius:10, background:`${C.accent}0c`, border:`1px solid ${C.accent}25` }}>
+              <div style={{ fontSize:12, color:C.muted, lineHeight:1.9 }}>
+                <strong style={{color:C.text}}># Titre</strong> → plus grand · <strong style={{color:C.text}}>**gras**</strong> · <strong style={{color:C.text}}>*italique*</strong> · <strong style={{color:C.text}}>__souligné__</strong><br/>
+                <strong style={{color:C.text}}>https://...</strong> → lien cliquable<br/>
+                <span style={{color:"#c0392b"}}>{"{r:}"}</span> rouge ·&nbsp;
+                <span style={{color:"#e07b2a"}}>{"{o:}"}</span> orange ·&nbsp;
+                <span style={{color:"#2a7fa8"}}>{"{b:}"}</span> bleu ·&nbsp;
+                <span style={{color:"#27ae60"}}>{"{v:}"}</span> vert<br/>
+                <span style={{color:"#d4006a"}}>{"{f:}"}</span> fuchsia ·&nbsp;
+                <span style={{color:"#6c3483"}}>{"{m:}"}</span> violet ·&nbsp;
+                <span style={{color:"#00897b"}}>{"{t:}"}</span> turquoise ·&nbsp;
+                <span style={{color:"#c49a00"}}>{"{d:}"}</span> doré
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ════════════════════════════════════════════════════════════ */
+    function EditModal({ modal, form, setForm, onClose, onSaveDay, onSaveCard, onSaveTrip, onGenerateDays, onDeleteDay, onDeleteCard, safeBot }) {
+      const isEdit = !!modal.item;
+      const inp  = { width:"100%", padding:"11px 13px", borderRadius:10, background:C.surface2, border:`1px solid ${C.border2}`, color:C.text, fontSize:15, outline:"none" };
+      const ta   = { ...inp, resize:"vertical", minHeight:110, lineHeight:1.65 };
+      const lbl  = { fontSize:11, fontWeight:600, color:C.muted, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6, display:"block" };
+      const dayCount = form.startDate&&form.endDate ? buildDays(form.startDate,form.endDate).length : null;
+
+      return (
+        <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.35)", zIndex:50, display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
+          <div style={{ background:C.surface, borderRadius:"20px 20px 0 0", border:`1px solid ${C.border}`, padding:`16px 20px calc(${safeBot} + 24px)`, maxHeight:"90svh", overflowY:"auto" }}>
+            <div style={{ width:36, height:4, background:C.border, borderRadius:2, margin:"0 auto 20px" }}/>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <div style={{ fontFamily:C.serif, fontSize:18, fontWeight:600, color:C.text }}>
+                {modal.type==="day"  && (isEdit?"Modifier le jour":"Ajouter un jour")}
+                {modal.type==="card" && (isEdit?"Modifier l'info":"Nouvelle info")}
+                {modal.type==="trip" && "Modifier le voyage"}
+              </div>
+              <button onClick={onClose} style={{ background:"none", border:"none", color:C.muted, fontSize:22, cursor:"pointer" }}>✕</button>
+            </div>
+
+            {modal.type==="day" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <div>
+                  <label style={lbl}>Date</label>
+                  <input type="date" style={inp} value={form.date||""} onChange={e=>setForm({...form,date:e.target.value})}/>
+                  {form.date && <div style={{ fontSize:12, color:C.accent, marginTop:6, textTransform:"capitalize" }}>{fmtLong(form.date)}</div>}
+                </div>
+                <div>
+                  <label style={lbl}>📅 Programme de la journée</label>
+                  <textarea style={{...ta,minHeight:140}} placeholder={"# Matin\n08h00 **Petit déjeuner** à l'hôtel\n09h30 Départ pour *Disneyland*\n\n# Après-midi\n14h00 Parade des personnages"} value={form.planning||""} onChange={e=>setForm({...form,planning:e.target.value})}/>
+                </div>
+                <div>
+                  <label style={lbl}>📌 Infos pratiques</label>
+                  <textarea style={ta} placeholder={"Résa hôtel: ABC-1234\nCheck-in: 15h00\nhttps://mon-hotel.com"} value={form.notes||""} onChange={e=>setForm({...form,notes:e.target.value})}/>
+                </div>
+                <div style={{ display:"flex", gap:10, marginTop:4 }}>
+                  {isEdit && <button onClick={()=>onDeleteDay(modal.item.id)} style={{ flex:1, padding:"13px", borderRadius:11, background:`${C.danger}10`, border:`1px solid ${C.danger}30`, color:C.danger, fontSize:14, cursor:"pointer" }}>Supprimer</button>}
+                  <button onClick={onSaveDay} style={{ flex:2, padding:"13px", borderRadius:11, background:C.accent, border:"none", color:"#fff", fontSize:15, fontWeight:600, cursor:"pointer" }}>{isEdit?"Enregistrer":"Ajouter"}</button>
+                </div>
+              </div>
+            )}
+
+            {modal.type==="card" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <div><label style={lbl}>Titre</label><input style={inp} placeholder="ex: Hôtel, Arrival Card..." value={form.title||""} onChange={e=>setForm({...form,title:e.target.value})}/></div>
+                <div>
+                  <label style={lbl}>Contenu</label>
+                  <textarea style={{...ta,minHeight:160}} placeholder={"**Hôtel Sunshine Inn** — Chambre 412\nRésa: XBGT-9834\nCheck-in: 15h / Check-out: 11h\nWifi: hotel_guest / pass2025\nhttps://hotel-sunshine.com"} value={form.content||""} onChange={e=>setForm({...form,content:e.target.value})}/>
+                </div>
+                <div style={{ display:"flex", gap:10, marginTop:4 }}>
+                  {isEdit && <button onClick={()=>onDeleteCard(modal.item.id)} style={{ flex:1, padding:"13px", borderRadius:11, background:`${C.danger}10`, border:`1px solid ${C.danger}30`, color:C.danger, fontSize:14, cursor:"pointer" }}>Supprimer</button>}
+                  <button onClick={onSaveCard} style={{ flex:2, padding:"13px", borderRadius:11, background:C.accent2, border:"none", color:"#fff", fontSize:15, fontWeight:600, cursor:"pointer" }}>{isEdit?"Enregistrer":"Ajouter"}</button>
+                </div>
+              </div>
+            )}
+
+            {modal.type==="trip" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <div><label style={lbl}>Nom du voyage</label><input style={inp} placeholder="Voyage au Japon 🗾" value={form.name||""} onChange={e=>setForm({...form,name:e.target.value})}/></div>
+                <div style={{ display:"flex", gap:10 }}>
+                  <div style={{ flex:1 }}><label style={lbl}>Départ</label><input type="date" style={inp} value={form.startDate||""} onChange={e=>setForm({...form,startDate:e.target.value})}/></div>
+                  <div style={{ flex:1 }}><label style={lbl}>Retour</label><input type="date" style={inp} value={form.endDate||""} onChange={e=>setForm({...form,endDate:e.target.value})}/></div>
+                </div>
+                {dayCount && (
+                  <div style={{ padding:"10px 14px", borderRadius:10, background:`${C.accent}0c`, border:`1px solid ${C.accent}25` }}>
+                    <div style={{ fontSize:13, color:C.accent, fontWeight:600 }}>{dayCount} jours de voyage</div>
+                    <div style={{ fontSize:12, color:C.muted, marginTop:2, textTransform:"capitalize" }}>{fmtLong(form.startDate)} → {fmtLong(form.endDate)}</div>
+                  </div>
+                )}
+                <button onClick={onGenerateDays} style={{ padding:"13px", borderRadius:11, background:`${C.accent}15`, border:`1px solid ${C.accent}40`, color:C.accent, fontSize:14, fontWeight:600, cursor:"pointer" }}>
+                  ✨ Générer les jours automatiquement
+                </button>
+                <div style={{ height:1, background:C.border }}/>
+                <button onClick={onSaveTrip} style={{ padding:"13px", borderRadius:11, background:C.accent, border:"none", color:"#fff", fontSize:15, fontWeight:600, cursor:"pointer" }}>
+                  Enregistrer sans générer
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* ════════════════════════════════════════════════════════════ */
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
