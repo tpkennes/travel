@@ -115,22 +115,32 @@
     const renderBlock = (text, fontSize, withBullets=false) => {
       if (!text) return null;
       return text.split("\n").filter(Boolean).map((line, i) => {
+        if (line.trim() === "---") return (
+          <div key={i} style={{ height:1, background:C.border2, margin:"6px 0" }}/>
+        );
         const isHeading = line.startsWith("# ");
-        const content   = isHeading ? line.slice(2) : line;
-        const fs        = isHeading ? fontSize + 2 : fontSize;
+        const isSub     = line.startsWith("> ");
+        const content   = isHeading ? line.slice(2) : isSub ? line.slice(2) : line;
+        const fs        = isHeading ? fontSize + 2 : isSub ? fontSize - 1 : fontSize;
         const color     = isHeading ? C.accent : C.text;
         const weight    = isHeading ? 600 : 400;
         const ff        = isHeading ? C.serif : C.font;
         const mb        = isHeading ? 5 : withBullets ? 5 : 3;
 
-        if (withBullets && !isHeading) {
-          return (
-            <div key={i} style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:mb }}>
-              <div style={{ width:4, height:4, borderRadius:"50%", background:C.accent2, flexShrink:0, marginTop:6 }}/>
-              <div style={{ fontSize:fs, color, fontWeight:weight, fontFamily:ff, lineHeight:1.65 }}>{renderInline(content, color)}</div>
-            </div>
-          );
-        }
+        if (isSub) return (
+          <div key={i} style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:mb, paddingLeft:12, borderLeft:`2px solid ${C.border2}` }}>
+            <span style={{ color:C.muted, fontSize:fs, flexShrink:0 }}>➔</span>
+            <div style={{ fontSize:fs, color:C.muted, lineHeight:1.65 }}>{renderInline(content, C.muted)}</div>
+          </div>
+        );
+
+        if (withBullets && !isHeading) return (
+          <div key={i} style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:mb }}>
+            <div style={{ width:4, height:4, borderRadius:"50%", background:C.accent2, flexShrink:0, marginTop:6 }}/>
+            <div style={{ fontSize:fs, color, fontWeight:weight, fontFamily:ff, lineHeight:1.65 }}>{renderInline(content, color)}</div>
+          </div>
+        );
+
         return (
           <div key={i} style={{ fontSize:fs, color, fontWeight:weight, fontFamily:ff, lineHeight:1.7, marginBottom:mb }}>{renderInline(content, color)}</div>
         );
@@ -458,7 +468,9 @@
 
             <div style={{ marginTop:16, padding:"10px 14px", borderRadius:10, background:`${C.accent}0c`, border:`1px solid ${C.accent}25` }}>
               <div style={{ fontSize:12, color:C.muted, lineHeight:1.9 }}>
-                <strong style={{color:C.text}}># Titre</strong> → plus grand · <strong style={{color:C.text}}>**gras**</strong> · <strong style={{color:C.text}}>*italique*</strong> · <strong style={{color:C.text}}>__souligné__</strong><br/>
+                <strong style={{color:C.text}}># Titre</strong> · <strong style={{color:C.text}}>**gras**</strong> · <strong style={{color:C.text}}>*italique*</strong> · <strong style={{color:C.text}}>__souligné__</strong><br/>
+                <strong style={{color:C.text}}>&gt; texte</strong> → sous-étape indentée avec ➔<br/>
+                <strong style={{color:C.text}}>---</strong> → ligne de séparation<br/>
                 <strong style={{color:C.text}}>https://...</strong> → lien cliquable<br/>
                 <span style={{color:"#c0392b"}}>{"{r:}"}</span> rouge ·&nbsp;
                 <span style={{color:"#e07b2a"}}>{"{o:}"}</span> orange ·&nbsp;
@@ -509,6 +521,8 @@
         { label: "●", title:"Turquoise", style:{ color:"#00897b", fontSize:16 },   action: () => wrap("{t:","}")  },
         { label: "●", title:"Doré",      style:{ color:"#c49a00", fontSize:16 },   action: () => wrap("{d:","}")  },
         { label: "➔", title:"Flèche",    style:{ fontSize:16 },                    action: () => wrap("➔","")    },
+        { label: "↳", title:"Sous-étape", style:{ fontSize:16 },                   action: () => wrap("> ","")    },
+        { label: "—", title:"Séparateur", style:{ fontSize:16 },                   action: () => wrap("\n---\n","") },
       ];
 
       return (
