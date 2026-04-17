@@ -86,15 +86,16 @@
     };
 
     const parseInline = (text) => {
-      const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(__(.*?)__)|\{([romvftbd]):(.+?)\}|(https?:\/\/[^\s]+)/g;
+      const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(__(.*?)__)|\{([romvftbd]):(.+?)\}|(https?:\/\/[^\s]+)|(\b\d{1,2}[h:]\d{2}(?:am|pm)?\b|\b\d{1,2}(?:am|pm)\b)/gi;
       const parts = []; let last = 0; let match;
       while ((match = regex.exec(text)) !== null) {
         if (match.index > last) parts.push({ t:"text",   v:text.slice(last, match.index) });
-        if      (match[1]) parts.push({ t:"bold",      v:match[2] });
-        else if (match[3]) parts.push({ t:"italic",    v:match[4] });
-        else if (match[5]) parts.push({ t:"underline", v:match[6] });
-        else if (match[7]) parts.push({ t:"color",     v:match[8], color: COLORS[match[7]] });
-        else if (match[9]) parts.push({ t:"url",       v:match[9] });
+        if      (match[1])  parts.push({ t:"bold",      v:match[2] });
+        else if (match[3])  parts.push({ t:"italic",    v:match[4] });
+        else if (match[5])  parts.push({ t:"underline", v:match[6] });
+        else if (match[7])  parts.push({ t:"color",     v:match[8], color: COLORS[match[7]] });
+        else if (match[9])  parts.push({ t:"url",       v:match[9] });
+        else if (match[10]) parts.push({ t:"time",      v:match[10] });
         last = match.index + match[0].length;
       }
       if (last < text.length) parts.push({ t:"text", v:text.slice(last) });
@@ -106,7 +107,8 @@
       if (p.t==="italic")    return <em      key={i} style={{ fontStyle:"italic" }}>{p.v}</em>;
       if (p.t==="underline") return <span    key={i} style={{ textDecoration:"underline" }}>{p.v}</span>;
       if (p.t==="color")     return <span    key={i} style={{ color:p.color }}>{renderInline(p.v, p.color)}</span>;
-      if (p.t==="url")       return <a key={i} href={p.v} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ color:C.accent2, textDecoration:"underline", wordBreak:"break-all" }}>{p.v}</a>;
+      if (p.t==="time")      return <strong  key={i} style={{ fontWeight:600, color:baseColor }}>{p.v}</strong>;
+      if (p.t==="url")       return <a key={i} href={p.v} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ color:C.accent2, textDecoration:"underline", wordBreak:"break-all" }}>🔗 {p.v}</a>;
       return <span key={i}>{p.v}</span>;
     });
 
