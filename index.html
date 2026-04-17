@@ -108,7 +108,7 @@
       if (p.t==="underline") return <span    key={i} style={{ textDecoration:"underline" }}>{p.v}</span>;
       if (p.t==="color")     return <span    key={i} style={{ color:p.color }}>{renderInline(p.v, p.color)}</span>;
       if (p.t==="time")      return <strong  key={i} style={{ fontWeight:600, color:baseColor }}>{p.v}</strong>;
-      if (p.t==="url")       return <span key={i}>🔗 <a href={p.v} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ color:C.accent2, textDecoration:"underline", wordBreak:"break-all" }}>{p.v}</a></span>;
+      if (p.t==="url")       return <span key={i}><span style={{textDecoration:"none"}}>🔗 </span><a href={p.v} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ color:C.accent2, textDecoration:"underline", wordBreak:"break-all" }}>{p.v}</a></span>;
       return <span key={i}>{p.v}</span>;
     });
 
