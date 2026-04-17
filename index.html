@@ -476,9 +476,9 @@
     }
 
     /* ════════════════════════════════════════════════════════════ */
-    function FormatToolbar({ textareaRef }) {
+    function FormatToolbar({ focusedRef }) {
       const wrap = (before, after) => {
-        const el = textareaRef.current;
+        const el = focusedRef.current;
         if (!el) return;
         const start = el.selectionStart;
         const end   = el.selectionEnd;
@@ -497,21 +497,21 @@
       };
 
       const btns = [
-        { label: "G",  title:"Gras",      style:{ fontWeight:700 },                          action: () => wrap("**","**") },
-        { label: "I",  title:"Italique",  style:{ fontStyle:"italic" },                      action: () => wrap("*","*")   },
-        { label: "S",  title:"Souligné",  style:{ textDecoration:"underline" },              action: () => wrap("__","__") },
-        { label: "●",  title:"Rouge",     style:{ color:"#c0392b", fontSize:16 },            action: () => wrap("{r:","}")  },
-        { label: "●",  title:"Orange",    style:{ color:"#e07b2a", fontSize:16 },            action: () => wrap("{o:","}")  },
-        { label: "●",  title:"Bleu",      style:{ color:"#2a7fa8", fontSize:16 },            action: () => wrap("{b:","}")  },
-        { label: "●",  title:"Vert",      style:{ color:"#27ae60", fontSize:16 },            action: () => wrap("{v:","}")  },
-        { label: "●",  title:"Fuchsia",   style:{ color:"#d4006a", fontSize:16 },            action: () => wrap("{f:","}")  },
-        { label: "●",  title:"Violet",    style:{ color:"#6c3483", fontSize:16 },            action: () => wrap("{m:","}")  },
-        { label: "●",  title:"Turquoise", style:{ color:"#00897b", fontSize:16 },            action: () => wrap("{t:","}")  },
-        { label: "●",  title:"Doré",      style:{ color:"#c49a00", fontSize:16 },            action: () => wrap("{d:","}")  },
+        { label: "G", title:"Gras",      style:{ fontWeight:700 },                 action: () => wrap("**","**") },
+        { label: "I", title:"Italique",  style:{ fontStyle:"italic" },             action: () => wrap("*","*")   },
+        { label: "S", title:"Souligné",  style:{ textDecoration:"underline" },     action: () => wrap("__","__") },
+        { label: "●", title:"Rouge",     style:{ color:"#c0392b", fontSize:16 },   action: () => wrap("{r:","}")  },
+        { label: "●", title:"Orange",    style:{ color:"#e07b2a", fontSize:16 },   action: () => wrap("{o:","}")  },
+        { label: "●", title:"Bleu",      style:{ color:"#2a7fa8", fontSize:16 },   action: () => wrap("{b:","}")  },
+        { label: "●", title:"Vert",      style:{ color:"#27ae60", fontSize:16 },   action: () => wrap("{v:","}")  },
+        { label: "●", title:"Fuchsia",   style:{ color:"#d4006a", fontSize:16 },   action: () => wrap("{f:","}")  },
+        { label: "●", title:"Violet",    style:{ color:"#6c3483", fontSize:16 },   action: () => wrap("{m:","}")  },
+        { label: "●", title:"Turquoise", style:{ color:"#00897b", fontSize:16 },   action: () => wrap("{t:","}")  },
+        { label: "●", title:"Doré",      style:{ color:"#c49a00", fontSize:16 },   action: () => wrap("{d:","}")  },
       ];
 
       return (
-        <div style={{ display:"flex", flexWrap:"wrap", gap:6, padding:"8px 0 4px" }}>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:6, padding:"0 0 12px" }}>
           {btns.map((btn, i) => (
             <button key={i} title={btn.title}
               onMouseDown={e => { e.preventDefault(); btn.action(); }}
@@ -527,9 +527,11 @@
     /* ════════════════════════════════════════════════════════════ */
     function EditModal({ modal, form, setForm, onClose, onSaveDay, onSaveCard, onSaveTrip, onGenerateDays, onDeleteDay, onDeleteCard, safeBot }) {
       const { useRef } = React;
+      const focusedRef  = useRef(null);
       const planningRef = useRef(null);
       const notesRef    = useRef(null);
       const contentRef  = useRef(null);
+      const onFocus = (ref) => { focusedRef.current = ref.current; };
       const isEdit = !!modal.item;
       const inp  = { width:"100%", padding:"11px 13px", borderRadius:10, background:C.surface2, border:`1px solid ${C.border2}`, color:C.text, fontSize:15, outline:"none" };
       const ta   = { ...inp, resize:"vertical", minHeight:110, lineHeight:1.65 };
@@ -551,6 +553,7 @@
 
             {modal.type==="day" && (
               <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <FormatToolbar focusedRef={focusedRef}/>
                 <div>
                   <label style={lbl}>Date</label>
                   <input type="date" style={inp} value={form.date||""} onChange={e=>setForm({...form,date:e.target.value})}/>
@@ -558,13 +561,11 @@
                 </div>
                 <div>
                   <label style={lbl}>📅 Programme de la journée</label>
-                  <FormatToolbar textareaRef={planningRef}/>
-                  <textarea ref={planningRef} style={{...ta,minHeight:140}} placeholder={"# Matin\n08h00 **Petit déjeuner** à l'hôtel\n09h30 Départ pour *Disneyland*\n\n# Après-midi\n14h00 Parade des personnages"} value={form.planning||""} onChange={e=>setForm({...form,planning:e.target.value})}/>
+                  <textarea ref={planningRef} onFocus={()=>onFocus(planningRef)} style={{...ta,minHeight:140}} placeholder={"# Matin\n08h00 **Petit déjeuner** à l'hôtel\n09h30 Départ pour *Disneyland*\n\n# Après-midi\n14h00 Parade des personnages"} value={form.planning||""} onChange={e=>setForm({...form,planning:e.target.value})}/>
                 </div>
                 <div>
                   <label style={lbl}>📌 Infos pratiques</label>
-                  <FormatToolbar textareaRef={notesRef}/>
-                  <textarea ref={notesRef} style={ta} placeholder={"Résa hôtel: ABC-1234\nCheck-in: 15h00\nhttps://mon-hotel.com"} value={form.notes||""} onChange={e=>setForm({...form,notes:e.target.value})}/>
+                  <textarea ref={notesRef} onFocus={()=>onFocus(notesRef)} style={ta} placeholder={"Résa hôtel: ABC-1234\nCheck-in: 15h00\nhttps://mon-hotel.com"} value={form.notes||""} onChange={e=>setForm({...form,notes:e.target.value})}/>
                 </div>
                 <div style={{ display:"flex", gap:10, marginTop:4 }}>
                   {isEdit && <button onClick={()=>onDeleteDay(modal.item.id)} style={{ flex:1, padding:"13px", borderRadius:11, background:`${C.danger}10`, border:`1px solid ${C.danger}30`, color:C.danger, fontSize:14, cursor:"pointer" }}>Supprimer</button>}
@@ -575,11 +576,11 @@
 
             {modal.type==="card" && (
               <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <FormatToolbar focusedRef={focusedRef}/>
                 <div><label style={lbl}>Titre</label><input style={inp} placeholder="ex: Hôtel, Arrival Card..." value={form.title||""} onChange={e=>setForm({...form,title:e.target.value})}/></div>
                 <div>
                   <label style={lbl}>Contenu</label>
-                  <FormatToolbar textareaRef={contentRef}/>
-                  <textarea ref={contentRef} style={{...ta,minHeight:160}} placeholder={"**Hôtel Sunshine Inn** — Chambre 412\nRésa: XBGT-9834\nCheck-in: 15h / Check-out: 11h\nWifi: hotel_guest / pass2025\nhttps://hotel-sunshine.com"} value={form.content||""} onChange={e=>setForm({...form,content:e.target.value})}/>
+                  <textarea ref={contentRef} onFocus={()=>onFocus(contentRef)} style={{...ta,minHeight:160}} placeholder={"**Hôtel Sunshine Inn** — Chambre 412\nRésa: XBGT-9834\nCheck-in: 15h / Check-out: 11h\nWifi: hotel_guest / pass2025\nhttps://hotel-sunshine.com"} value={form.content||""} onChange={e=>setForm({...form,content:e.target.value})}/>
                 </div>
                 <div style={{ display:"flex", gap:10, marginTop:4 }}>
                   {isEdit && <button onClick={()=>onDeleteCard(modal.item.id)} style={{ flex:1, padding:"13px", borderRadius:11, background:`${C.danger}10`, border:`1px solid ${C.danger}30`, color:C.danger, fontSize:14, cursor:"pointer" }}>Supprimer</button>}
