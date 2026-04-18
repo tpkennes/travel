@@ -30,7 +30,7 @@
   const KEY  = "tripplanner_v3";
   const SKEY = "tripplanner_settings";
   const DEF  = { name:"Mon Voyage", startDate:"", endDate:"", days:[], cards:[] };
-  const DEFS = { previewLines:2, fontSize:14 };
+  const DEFS = { previewLines:2, fontSize:14, remoteUrl:"" };
 
   const uid   = () => Date.now().toString(36)+Math.random().toString(36).slice(2);
   const load  = () => { try { const s=localStorage.getItem(KEY);  return s?JSON.parse(s):DEF;           } catch { return DEF;  } };
@@ -217,6 +217,42 @@
       r.readAsText(f); e.target.value="";
     };
 
+    /* Convert various share URLs to raw content URLs */
+    const toRawUrl = url => {
+      if(!url) return url;
+      let m;
+      // Google Drive: https://drive.google.com/file/d/ID/view?...
+      m = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+      if(m) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
+      // Google Drive: https://drive.google.com/open?id=ID
+      m = url.match(/drive\.google\.com\/open\?id=([^&]+)/);
+      if(m) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
+      // GitHub Gist: https://gist.github.com/user/ID → raw
+      m = url.match(/gist\.github\.com\/([^/]+)\/([a-f0-9]+)$/);
+      if(m) return `https://gist.githubusercontent.com/${m[1]}/${m[2]}/raw`;
+      // Dropbox: ?dl=0 → ?dl=1
+      if(url.includes("dropbox.com")) return url.replace(/[?&]dl=0/,"?dl=1");
+      return url;
+    };
+
+    const loadFromUrl = async (url) => {
+      if(!url || !url.trim()){ showToast("⚠️ Aucune URL configurée"); return; }
+      const finalUrl = toRawUrl(url.trim());
+      showToast("⏳ Téléchargement...");
+      try {
+        const res = await fetch(finalUrl, { cache:"no-store" });
+        if(!res.ok) throw new Error("HTTP "+res.status);
+        const text = await res.text();
+        const p = JSON.parse(text);
+        if(!Array.isArray(p.days) || !Array.isArray(p.cards)) throw new Error("format");
+        save(p);
+        showToast("✅ Planning à jour !");
+      } catch(err) {
+        if(err.message==="format") showToast("❌ Format du fichier invalide");
+        else showToast("❌ Lien inaccessible (CORS ou URL)");
+      }
+    };
+
     const openModal = (type,item=null) => {
       setModal({type,item});
       if(type==="day")  setForm(item?{...item}:{date:"",planning:"",notes:"",color:null});
@@ -280,13 +316,7 @@
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:7,flexShrink:0,paddingTop:2}}>
               <div style={{fontSize:11,color:syncing?C.accent:C.muted}}>{syncing?"⟳ Sync...":"✓ Sauvegardé"}</div>
-              <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>setShowSettings(true)} style={{padding:"5px 10px",borderRadius:8,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer"}}>⚙️</button>
-                <button onClick={exportData} style={{padding:"5px 11px",borderRadius:8,background:C.accent,border:"none",color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>📤 Export</button>
-                <label style={{padding:"5px 11px",borderRadius:8,background:C.accent2,border:"none",color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-                  📥 Import<input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
-                </label>
-              </div>
+              <button onClick={()=>setShowSettings(true)} style={{padding:"5px 12px",borderRadius:8,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer"}}>⚙️ Paramètres</button>
             </div>
           </div>
           <div style={{display:"flex",marginBottom:-1}}>
@@ -333,7 +363,7 @@
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.3</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.4</div>
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - 226px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:"#fff",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
@@ -342,7 +372,7 @@
         {toast&&<div style={{position:"fixed",top:`calc(12px + ${safeTop})`,left:"50%",transform:"translateX(-50%)",background:C.text,borderRadius:10,padding:"10px 18px",fontSize:13,color:"#fff",zIndex:100,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.2)"}}>{toast}</div>}
 
         {/* Settings */}
-        {showSettings&&<SettingsPanel settings={settings} onChange={saveSettings} onClose={()=>setShowSettings(false)} safeBot={safeBot}/>}
+        {showSettings&&<SettingsPanel settings={settings} onChange={saveSettings} onClose={()=>setShowSettings(false)} safeBot={safeBot} exportData={exportData} importData={importData} loadFromUrl={loadFromUrl}/>}
 
         {/* Modal */}
         {modal&&<EditModal modal={modal} form={form} setForm={setForm} onClose={closeModal}
@@ -499,28 +529,62 @@
   }
 
   /* ════════ SETTINGS PANEL ════════ */
-  function SettingsPanel({settings,onChange,onClose,safeBot}) {
+  function SettingsPanel({settings,onChange,onClose,safeBot,exportData,importData,loadFromUrl}) {
     const lbl={fontSize:13,color:C.text,fontWeight:500};
     const val={fontSize:13,color:C.accent,fontWeight:600,minWidth:28,textAlign:"right"};
+    const inp={width:"100%",padding:"10px 12px",borderRadius:9,background:C.surface2,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,outline:"none",minWidth:0};
+    const section={padding:"14px",borderRadius:11,background:C.surface2,border:`1px solid ${C.border}`,marginBottom:14};
+    const sectionTitle={fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:1,marginBottom:10};
     return (
       <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
-        <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,touchAction:"pan-y"}}>
+        <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"90svh",overflowY:"auto",touchAction:"pan-y"}}>
           <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 20px"}}/>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-            <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Affichage des tuiles</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+            <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Paramètres</div>
             <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
           </div>
-          <div style={{marginBottom:24}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={lbl}>Lignes de programme visibles</span><span style={val}>{settings.previewLines}</span></div>
-            <input type="range" min="1" max="6" step="1" value={settings.previewLines} onChange={e=>onChange({...settings,previewLines:parseInt(e.target.value)})} style={{width:"100%"}}/>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginTop:4}}><span>1</span><span>6</span></div>
+
+          {/* ── Sauvegarde / Partage ── */}
+          <div style={section}>
+            <div style={sectionTitle}>💾 Sauvegarde & Partage</div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <button onClick={exportData} style={{flex:1,padding:"11px",borderRadius:9,background:C.accent,border:"none",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}}>📤 Exporter</button>
+              <label style={{flex:1,padding:"11px",borderRadius:9,background:C.accent2,border:"none",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",textAlign:"center"}}>
+                📥 Importer<input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
+              </label>
+            </div>
           </div>
-          <div style={{marginBottom:24}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={lbl}>Taille du texte</span><span style={val}>{settings.fontSize}px</span></div>
-            <input type="range" min="11" max="17" step="1" value={settings.fontSize} onChange={e=>onChange({...settings,fontSize:parseInt(e.target.value)})} style={{width:"100%"}}/>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginTop:4}}><span>Petit</span><span>Grand</span></div>
+
+          {/* ── Import par lien ── */}
+          <div style={section}>
+            <div style={sectionTitle}>🔗 Lien partagé</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.5}}>
+              Colle ici l'URL d'un fichier JSON partagé (GitHub Gist, Google Drive, Dropbox...). L'organisateur du voyage met à jour le fichier à la source, toi tu cliques sur 🔄 pour récupérer la dernière version.
+            </div>
+            <input style={inp} placeholder="https://gist.githubusercontent.com/..." value={settings.remoteUrl||""} onChange={e=>onChange({...settings,remoteUrl:e.target.value})}/>
+            <div style={{display:"flex",gap:8,marginTop:10}}>
+              <button onClick={()=>loadFromUrl(settings.remoteUrl)} disabled={!settings.remoteUrl?.trim()} style={{flex:1,padding:"10px",borderRadius:9,background:settings.remoteUrl?.trim()?`${C.accent}18`:C.surface2,border:`1px solid ${settings.remoteUrl?.trim()?C.accent:C.border2}`,color:settings.remoteUrl?.trim()?C.accent:C.muted,fontSize:13,fontWeight:600,cursor:settings.remoteUrl?.trim()?"pointer":"default"}}>🔄 Actualiser depuis le lien</button>
+            </div>
           </div>
+
+          {/* ── Affichage ── */}
+          <div style={section}>
+            <div style={sectionTitle}>🎨 Affichage des tuiles</div>
+            <div style={{marginBottom:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={lbl}>Lignes de programme visibles</span><span style={val}>{settings.previewLines}</span></div>
+              <input type="range" min="1" max="6" step="1" value={settings.previewLines} onChange={e=>onChange({...settings,previewLines:parseInt(e.target.value)})} style={{width:"100%"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginTop:4}}><span>1</span><span>6</span></div>
+            </div>
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={lbl}>Taille du texte</span><span style={val}>{settings.fontSize}px</span></div>
+              <input type="range" min="11" max="17" step="1" value={settings.fontSize} onChange={e=>onChange({...settings,fontSize:parseInt(e.target.value)})} style={{width:"100%"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginTop:4}}><span>Petit</span><span>Grand</span></div>
+            </div>
+          </div>
+
+          {/* ── Markdown cheat sheet ── */}
           <div style={{padding:"10px 14px",borderRadius:10,background:`${C.accent}0c`,border:`1px solid ${C.accent}25`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Aide markdown</div>
             <div style={{fontSize:12,color:C.muted,lineHeight:1.9}}>
               <strong style={{color:C.text}}># Titre</strong> · <strong style={{color:C.text}}>**gras**</strong> · <strong style={{color:C.text}}>*italique*</strong> · <strong style={{color:C.text}}>__souligné__</strong><br/>
               <strong style={{color:C.text}}>&gt; texte</strong> → sous-étape · <strong style={{color:C.text}}>---</strong> → séparateur<br/>
