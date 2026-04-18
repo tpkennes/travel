@@ -19,7 +19,8 @@
     ::-webkit-scrollbar{display:none}
     input,textarea,button,label{font-family:inherit}
     input[type="range"]{accent-color:#c4622a}
-    input[type="date"]{color-scheme:light}
+    input[type="date"]{color-scheme:light;max-width:100%}
+    input[type="date"]::-webkit-date-and-time-value{text-align:left}
   </style>
 </head>
 <body>
@@ -220,7 +221,7 @@
     const openModal = (type,item=null) => {
       setModal({type,item});
       if(type==="day")  setForm(item?{...item}:{date:"",planning:"",notes:"",color:null});
-      if(type==="card") setForm(item?{...item}:{kind:"info",title:"",content:"",color:null,todos:[]});
+      if(type==="card") setForm(item?{kind:"info",todos:[],...item}:{kind:"info",title:"",content:"",color:null,todos:[]});
       if(type==="trip") setForm({name:data.name,startDate:data.startDate||"",endDate:data.endDate||""});
     };
     const closeModal = () => { setModal(null); setForm({}); };
@@ -246,7 +247,7 @@
     const toggleTodo = (cardId, todoId) => {
       const cards = data.cards.map(c => {
         if(c.id!==cardId) return c;
-        return {...c, todos:c.todos.map(t=>t.id===todoId?{...t,done:!t.done}:t)};
+        return {...c, todos:(c.todos||[]).map(t=>t.id===todoId?{...t,done:!t.done}:t)};
       });
       save({...data,cards});
     };
@@ -333,7 +334,7 @@
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.0</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.1</div>
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - 226px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:"#fff",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
@@ -442,12 +443,13 @@
     const iconBorder = badgeHex?"none":`1px solid ${C.accent2}28`;
     const iconColor  = badgeHex?"#fff":C.accent2;
 
-    const preview = isTodo
-      ?(card.todos||[]).length+` item${(card.todos||[]).length>1?"s":""} · `+((card.todos||[]).filter(t=>t.done).length)+" fait"+(((card.todos||[]).filter(t=>t.done).length)>1?"s":"")
-      :stripMd((card.content||"").split("\n").filter(Boolean)[0]||"");
+    const todosList  = isTodo?(card.todos||[]):[];
+    const doneCount  = todosList.filter(t=>t.done).length;
+    const totalCount = todosList.length;
 
-    const doneCount = isTodo?(card.todos||[]).filter(t=>t.done).length:0;
-    const totalCount= isTodo?(card.todos||[]).length:0;
+    const preview = isTodo
+      ? (totalCount===0 ? "Liste vide" : `${doneCount}/${totalCount} fait${doneCount>1?"s":""}`)
+      : stripMd((card.content||"").split("\n").filter(Boolean)[0]||"");
 
     return (
       <div style={{marginBottom:12,borderRadius:12,background:C.surface,border:`1px solid ${C.border}`,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
@@ -471,7 +473,7 @@
           <div style={{borderTop:`1px solid ${C.border}`,padding:"14px 16px",background:C.surface2}}>
             {isTodo?(
               <div style={{marginBottom:14}}>
-                {(card.todos||[]).map(todo=>(
+                {todosList.map(todo=>(
                   <div key={todo.id} onClick={()=>onToggleTodo(todo.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
                     <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${todo.done?C.accent2:C.border2}`,background:todo.done?C.accent2:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
                       {todo.done&&<span style={{color:"#fff",fontSize:12,fontWeight:700}}>✓</span>}
@@ -481,7 +483,7 @@
                     </div>
                   </div>
                 ))}
-                {(card.todos||[]).length===0&&<div style={{fontSize:13,color:C.muted,fontStyle:"italic"}}>Aucun item — modifie pour en ajouter</div>}
+                {totalCount===0&&<div style={{fontSize:13,color:C.muted,fontStyle:"italic"}}>Aucun item — modifie pour en ajouter</div>}
               </div>
             ):(
               <div style={{marginBottom:14}}>{renderBlock(card.content,14,true)}</div>
