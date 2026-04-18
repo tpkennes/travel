@@ -316,7 +316,7 @@
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:7,flexShrink:0,paddingTop:2}}>
               <div style={{fontSize:11,color:syncing?C.accent:C.muted}}>{syncing?"⟳ Sync...":"✓ Sauvegardé"}</div>
-              <button onClick={()=>setShowSettings(true)} style={{padding:"5px 12px",borderRadius:8,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer"}}>⚙️ Paramètres</button>
+              <button onClick={()=>setShowSettings(true)} style={{padding:"6px 10px",borderRadius:8,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:14,cursor:"pointer"}}>⚙️</button>
             </div>
           </div>
           <div style={{display:"flex",marginBottom:-1}}>
@@ -363,7 +363,7 @@
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.4</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.5</div>
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - 226px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:"#fff",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
@@ -530,11 +530,12 @@
 
   /* ════════ SETTINGS PANEL ════════ */
   function SettingsPanel({settings,onChange,onClose,safeBot,exportData,importData,loadFromUrl}) {
+    const [showHelp, setShowHelp] = useState(false);
     const lbl={fontSize:13,color:C.text,fontWeight:500};
     const val={fontSize:13,color:C.accent,fontWeight:600,minWidth:28,textAlign:"right"};
     const inp={width:"100%",padding:"10px 12px",borderRadius:9,background:C.surface2,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,outline:"none",minWidth:0};
     const section={padding:"14px",borderRadius:11,background:C.surface2,border:`1px solid ${C.border}`,marginBottom:14};
-    const sectionTitle={fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:1,marginBottom:10};
+    const sectionTitle={fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:1,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between"};
     return (
       <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
         <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"90svh",overflowY:"auto",touchAction:"pan-y"}}>
@@ -546,8 +547,8 @@
 
           {/* ── Sauvegarde / Partage ── */}
           <div style={section}>
-            <div style={sectionTitle}>💾 Sauvegarde & Partage</div>
-            <div style={{display:"flex",gap:8,marginBottom:12}}>
+            <div style={sectionTitle}><span>💾 Sauvegarde & Partage</span></div>
+            <div style={{display:"flex",gap:8}}>
               <button onClick={exportData} style={{flex:1,padding:"11px",borderRadius:9,background:C.accent,border:"none",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}}>📤 Exporter</button>
               <label style={{flex:1,padding:"11px",borderRadius:9,background:C.accent2,border:"none",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",textAlign:"center"}}>
                 📥 Importer<input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
@@ -557,19 +558,20 @@
 
           {/* ── Import par lien ── */}
           <div style={section}>
-            <div style={sectionTitle}>🔗 Lien partagé</div>
+            <div style={sectionTitle}>
+              <span>🔗 Lien partagé</span>
+              <button onClick={()=>setShowHelp(true)} title="Comment ça marche ?" style={{background:"none",border:`1px solid ${C.accent}55`,borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:700,padding:0}}>i</button>
+            </div>
             <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.5}}>
-              Colle ici l'URL d'un fichier JSON partagé (GitHub Gist, Google Drive, Dropbox...). L'organisateur du voyage met à jour le fichier à la source, toi tu cliques sur 🔄 pour récupérer la dernière version.
+              Colle ici l'URL d'un fichier JSON partagé. Clique sur ℹ️ pour voir comment créer ton lien.
             </div>
             <input style={inp} placeholder="https://gist.githubusercontent.com/..." value={settings.remoteUrl||""} onChange={e=>onChange({...settings,remoteUrl:e.target.value})}/>
-            <div style={{display:"flex",gap:8,marginTop:10}}>
-              <button onClick={()=>loadFromUrl(settings.remoteUrl)} disabled={!settings.remoteUrl?.trim()} style={{flex:1,padding:"10px",borderRadius:9,background:settings.remoteUrl?.trim()?`${C.accent}18`:C.surface2,border:`1px solid ${settings.remoteUrl?.trim()?C.accent:C.border2}`,color:settings.remoteUrl?.trim()?C.accent:C.muted,fontSize:13,fontWeight:600,cursor:settings.remoteUrl?.trim()?"pointer":"default"}}>🔄 Actualiser depuis le lien</button>
-            </div>
+            <button onClick={()=>loadFromUrl(settings.remoteUrl)} disabled={!settings.remoteUrl?.trim()} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:9,background:settings.remoteUrl?.trim()?`${C.accent}18`:C.surface2,border:`1px solid ${settings.remoteUrl?.trim()?C.accent:C.border2}`,color:settings.remoteUrl?.trim()?C.accent:C.muted,fontSize:13,fontWeight:600,cursor:settings.remoteUrl?.trim()?"pointer":"default"}}>🔄 Actualiser depuis le lien</button>
           </div>
 
           {/* ── Affichage ── */}
           <div style={section}>
-            <div style={sectionTitle}>🎨 Affichage des tuiles</div>
+            <div style={sectionTitle}><span>🎨 Affichage des tuiles</span></div>
             <div style={{marginBottom:16}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={lbl}>Lignes de programme visibles</span><span style={val}>{settings.previewLines}</span></div>
               <input type="range" min="1" max="6" step="1" value={settings.previewLines} onChange={e=>onChange({...settings,previewLines:parseInt(e.target.value)})} style={{width:"100%"}}/>
@@ -593,6 +595,57 @@
               <span style={{color:"#d4006a"}}>{"{f:}"}</span> fuchsia · <span style={{color:"#6c3483"}}>{"{m:}"}</span> violet · <span style={{color:"#00897b"}}>{"{t:}"}</span> turquoise · <span style={{color:"#c49a00"}}>{"{d:}"}</span> doré
             </div>
           </div>
+        </div>
+
+        {/* Help modal */}
+        {showHelp && <HelpLinkModal onClose={()=>setShowHelp(false)} safeBot={safeBot}/>}
+      </div>
+    );
+  }
+
+  /* ════════ HELP LINK MODAL ════════ */
+  function HelpLinkModal({onClose, safeBot}) {
+    const h={fontFamily:C.serif,fontSize:15,fontWeight:600,color:C.accent,margin:"16px 0 8px"};
+    const p={fontSize:13,color:C.text,lineHeight:1.65,marginBottom:8};
+    const code={background:C.surface2,padding:"2px 6px",borderRadius:4,fontFamily:"monospace",fontSize:12,color:C.accent,border:`1px solid ${C.border}`};
+    const step={fontSize:13,color:C.text,lineHeight:1.65,marginBottom:10,paddingLeft:22,position:"relative"};
+    const num={position:"absolute",left:0,top:0,width:16,height:16,borderRadius:"50%",background:C.accent,color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"};
+    return (
+      <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:60,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+        <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"92svh",overflowY:"auto",touchAction:"pan-y"}}>
+          <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 20px"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Partager ton planning</div>
+            <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
+          </div>
+          <div style={p}>Cette fonction permet à ta famille de <strong>toujours avoir la dernière version</strong> de ton planning sans que tu aies à leur renvoyer le fichier à chaque modification. Le principe : tu héberges ton JSON en ligne avec une URL stable, ils s'y abonnent une fois.</div>
+
+          <div style={h}>🎯 Recommandé : GitHub Gist</div>
+          <div style={p}>GitHub Gist donne une URL <strong>qui ne change jamais</strong>, même si tu modifies le fichier 100 fois. Un compte gratuit est requis.</div>
+
+          <div style={h}>📝 Comment faire (1ère fois)</div>
+          <div style={step}><span style={num}>1</span>Exporte ton planning avec le bouton 📤 Exporter</div>
+          <div style={step}><span style={num}>2</span>Va sur <span style={code}>gist.github.com</span> et crée un compte gratuit si nécessaire</div>
+          <div style={step}><span style={num}>3</span>Dans la page "New gist" : donne un nom au fichier (ex: <span style={code}>voyage.json</span>) et colle le contenu de ton JSON exporté</div>
+          <div style={step}><span style={num}>4</span>Clique sur <strong>"Create public gist"</strong></div>
+          <div style={step}><span style={num}>5</span>Sur la page du gist, clique sur le bouton <strong>"Raw"</strong> à droite du nom du fichier</div>
+          <div style={step}><span style={num}>6</span>Copie l'URL qui s'affiche dans ton navigateur — c'est <strong>cette URL</strong> que tu donnes à ta famille</div>
+
+          <div style={h}>🔄 Mises à jour suivantes</div>
+          <div style={step}><span style={num}>1</span>Retourne sur ton gist, clique sur <strong>"Edit"</strong></div>
+          <div style={step}><span style={num}>2</span>Remplace tout le contenu par ton nouveau JSON exporté</div>
+          <div style={step}><span style={num}>3</span>Clique sur <strong>"Update public gist"</strong> — l'URL ne change pas</div>
+          <div style={step}><span style={num}>4</span>Ta famille clique sur 🔄 Actualiser dans l'app pour récupérer la nouvelle version</div>
+
+          <div style={h}>📲 Pour ta famille</div>
+          <div style={step}><span style={num}>1</span>Dans l'app, ouvre les Paramètres ⚙️</div>
+          <div style={step}><span style={num}>2</span>Colle l'URL dans le champ "Lien partagé"</div>
+          <div style={step}><span style={num}>3</span>Clique sur 🔄 Actualiser — le planning se charge. À refaire à chaque fois qu'ils veulent la dernière version.</div>
+
+          <div style={h}>💡 Autres services supportés</div>
+          <div style={p}>L'app convertit automatiquement les liens provenant de <strong>Google Drive</strong> et <strong>Dropbox</strong>, mais ces services peuvent bloquer l'accès (erreur CORS). <strong>GitHub Gist reste le plus fiable.</strong></div>
+
+          <button onClick={onClose} style={{width:"100%",marginTop:16,padding:"12px",borderRadius:10,background:C.accent,border:"none",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>J'ai compris</button>
         </div>
       </div>
     );
