@@ -603,6 +603,7 @@
                 <div>
                   <label style={lbl}>📅 Programme de la journée</label>
                   <textarea ref={planningRef} onFocus={()=>onFocus(planningRef)} style={{...ta,minHeight:140}} placeholder={"# Matin\n08h00 **Petit déjeuner** à l'hôtel\n09h30 Départ pour *Disneyland*\n\n# Après-midi\n14h00 Parade des personnages"} value={form.planning||""} onChange={e=>setForm({...form,planning:e.target.value})}/>
+                </div>
                 <div>
                   <label style={lbl}>📌 Infos pratiques</label>
                   <textarea ref={notesRef} onFocus={()=>onFocus(notesRef)} style={ta} placeholder={"Résa hôtel: ABC-1234\nCheck-in: 15h00\nhttps://mon-hotel.com"} value={form.notes||""} onChange={e=>setForm({...form,notes:e.target.value})}/>
