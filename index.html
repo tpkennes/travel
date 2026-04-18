@@ -19,7 +19,7 @@
     ::-webkit-scrollbar{display:none}
     input,textarea,button,label{font-family:inherit}
     input[type="range"]{accent-color:#c4622a}
-    input[type="date"]{color-scheme:light;max-width:100%;min-width:0;width:100%}
+    input[type="date"]{color-scheme:light;max-width:100%;min-width:0;width:100%;-webkit-appearance:none;appearance:none;-webkit-min-logical-width:calc(100% - 16px)}
   </style>
 </head>
 <body>
@@ -333,7 +333,7 @@
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.2</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.3</div>
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - 226px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:"#fff",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
