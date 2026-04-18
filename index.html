@@ -74,6 +74,14 @@
     /* ── Markdown + URL inline parser ──
        Supports: **bold**, *italic*, # heading (slightly larger), https://... links
     */
+    const BADGE_COLORS = [
+      { id:"red",    hex:"#a93226", label:"Rouge brique" },
+      { id:"blue",   hex:"#1a5276", label:"Bleu marine"  },
+      { id:"green",  hex:"#1e8449", label:"Vert forêt"   },
+      { id:"purple", hex:"#6c3483", label:"Violet"       },
+      { id:"amber",  hex:"#b7770d", label:"Ambre"        },
+    ];
+
     const COLORS = {
       r: "#c0392b",
       o: "#e07b2a",
@@ -337,11 +345,20 @@
           <div onClick={onToggle} style={{ display:"flex", alignItems:"stretch", cursor:"pointer" }}>
 
             {/* Date badge — distinct background column */}
-            <div style={{ width:52, flexShrink:0, background:C.surface2, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"12px 0", gap:1 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:0.8, textTransform:"uppercase" }}>{fmtInit(day.date)}</div>
-              <div style={{ fontFamily:C.serif, fontWeight:600, color:isSwapSource?C.accent:swapTarget?C.accent2:C.accent, fontSize:26, lineHeight:1.05 }}>{fmtNum(day.date)}</div>
-              <div style={{ fontSize:9, color:C.muted, textTransform:"lowercase" }}>{fmtMon(day.date)}</div>
-            </div>
+            {(() => {
+              const badgeColor = day.color ? BADGE_COLORS.find(c=>c.id===day.color)?.hex : null;
+              const bg         = badgeColor || C.surface2;
+              const textColor  = badgeColor ? "#ffffff" : null;
+              const numColor   = badgeColor ? "#ffffff" : (isSwapSource ? C.accent : swapTarget ? C.accent2 : C.accent);
+              const mutedColor = badgeColor ? "rgba(255,255,255,0.7)" : C.muted;
+              return (
+                <div style={{ width:52, flexShrink:0, background:bg, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"12px 0", gap:1 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:mutedColor, letterSpacing:0.8, textTransform:"uppercase" }}>{fmtInit(day.date)}</div>
+                  <div style={{ fontFamily:C.serif, fontWeight:600, color:numColor, fontSize:26, lineHeight:1.05 }}>{fmtNum(day.date)}</div>
+                  <div style={{ fontSize:9, color:mutedColor, textTransform:"lowercase" }}>{fmtMon(day.date)}</div>
+                </div>
+              );
+            })()}
 
             {/* Preview */}
             <div style={{ flex:1, minWidth:0, padding:"12px 12px 12px 14px", display:"flex", flexDirection:"column", justifyContent:"center" }}>
@@ -575,9 +592,17 @@
                   {form.date && <div style={{ fontSize:12, color:C.accent, marginTop:6, textTransform:"capitalize" }}>{fmtLong(form.date)}</div>}
                 </div>
                 <div>
+                  <label style={lbl}>Couleur du badge date</label>
+                  <div style={{ display:"flex", gap:10, alignItems:"center", marginTop:4 }}>
+                    <div onClick={()=>setForm({...form,color:null})} style={{ width:30, height:30, borderRadius:"50%", background:C.surface2, border:`2px solid ${!form.color ? C.accent : C.border2}`, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, color:C.muted }}>✕</div>
+                    {BADGE_COLORS.map(c=>(
+                      <div key={c.id} onClick={()=>setForm({...form,color:c.id})} title={c.label} style={{ width:30, height:30, borderRadius:"50%", background:c.hex, border:`2px solid ${form.color===c.id ? C.text : "transparent"}`, cursor:"pointer", boxShadow: form.color===c.id ? `0 0 0 2px ${C.bg}, 0 0 0 4px ${c.hex}` : "none" }}/>
+                    ))}
+                  </div>
+                </div>
+                <div>
                   <label style={lbl}>📅 Programme de la journée</label>
                   <textarea ref={planningRef} onFocus={()=>onFocus(planningRef)} style={{...ta,minHeight:140}} placeholder={"# Matin\n08h00 **Petit déjeuner** à l'hôtel\n09h30 Départ pour *Disneyland*\n\n# Après-midi\n14h00 Parade des personnages"} value={form.planning||""} onChange={e=>setForm({...form,planning:e.target.value})}/>
-                </div>
                 <div>
                   <label style={lbl}>📌 Infos pratiques</label>
                   <textarea ref={notesRef} onFocus={()=>onFocus(notesRef)} style={ta} placeholder={"Résa hôtel: ABC-1234\nCheck-in: 15h00\nhttps://mon-hotel.com"} value={form.notes||""} onChange={e=>setForm({...form,notes:e.target.value})}/>
