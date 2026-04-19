@@ -91,7 +91,7 @@
     if(p.t==="underline") return <span key={i} style={{textDecoration:"underline"}}>{p.v}</span>;
     if(p.t==="color")     return <span key={i} style={{color:p.color}}>{renderInline(p.v,p.color)}</span>;
     if(p.t==="time")      return <strong key={i} style={{fontWeight:600,color:baseColor}}>{p.v}</strong>;
-    if(p.t==="url")       return <span key={i}><span style={{textDecoration:"none"}}>🔗 </span><a href={p.v} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:C.accent2,textDecoration:"underline",wordBreak:"break-all"}}>{p.v}</a></span>;
+    if(p.t==="url")       return <span key={i} style={{display:"inline-flex",alignItems:"baseline",maxWidth:"100%",verticalAlign:"baseline"}}><span style={{flexShrink:0}}>🔗 </span><a href={p.v} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:C.accent2,textDecoration:"underline",fontSize:"0.88em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"calc(100% - 20px)",display:"inline-block",verticalAlign:"bottom"}}>{p.v}</a></span>;
     return <span key={i}>{p.v}</span>;
   });
 
@@ -363,7 +363,7 @@
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.6.1</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.6.2</div>
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - 226px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:"#fff",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
