@@ -328,9 +328,9 @@
 
         {/* Swap banner */}
         {swapFor&&(
-          <div style={{background:`${C.accent2}15`,borderBottom:`1px solid ${C.accent2}40`,padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{fontSize:13,color:C.accent2,fontWeight:500}}>↔ Choisis le jour à échanger avec <strong>{fmtShort(data.days.find(d=>d.id===swapFor)?.date)}</strong></div>
-            <button onClick={()=>setSwapFor(null)} style={{background:"none",border:"none",color:C.muted,fontSize:16,cursor:"pointer"}}>✕</button>
+          <div style={{position:"sticky",top:0,background:C.accent,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,zIndex:15,boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
+            <div style={{fontSize:13,color:"#fff",fontWeight:500,flex:1,minWidth:0}}>↔ Échanger avec <strong>{fmtShort(data.days.find(d=>d.id===swapFor)?.date)}</strong><br/><span style={{fontSize:11,opacity:0.9,fontWeight:400}}>Touche un autre jour</span></div>
+            <button onClick={()=>setSwapFor(null)} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",padding:"8px 14px",borderRadius:8,flexShrink:0}}>Annuler</button>
           </div>
         )}
 
@@ -363,7 +363,7 @@
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.5</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.6</div>
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - 226px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:"#fff",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
@@ -405,10 +405,15 @@
     const badgeBg   = badgeHex||C.surface2;
     const numColor  = badgeHex?"#ffffff":(isSwapSource?C.accent:swapTarget?C.accent2:C.accent);
     const mutedClr  = badgeHex?"rgba(255,255,255,0.75)":C.muted;
-    const borderLeft= isSwapSource?`3px solid ${C.accent}`:swapTarget?`3px solid ${C.accent2}`:"3px solid transparent";
+
+    /* Swap highlighting */
+    const cardBg    = isSwapSource ? `${C.accent}15` : C.surface;
+    const cardBorder= isSwapSource ? C.accent : swapTarget ? C.accent2 : C.border;
+    const borderW   = isSwapSource ? 2 : 1;
+    const borderLeft= isSwapSource ? `4px solid ${C.accent}` : swapTarget ? `3px solid ${C.accent2}` : "3px solid transparent";
 
     return (
-      <div style={{marginBottom:12,borderRadius:12,background:C.surface,border:`1px solid ${swapTarget?C.accent2:C.border}`,borderLeft,overflow:"hidden",transition:"all 0.15s",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+      <div style={{marginBottom:12,borderRadius:12,background:cardBg,border:`${borderW}px solid ${cardBorder}`,borderLeft,overflow:"hidden",transition:"all 0.15s",boxShadow: isSwapSource?`0 4px 16px ${C.accent}40`:"0 2px 8px rgba(0,0,0,0.07)"}}>
         <div onClick={onToggle} style={{display:"flex",alignItems:"stretch",cursor:"pointer"}}>
           {/* Badge date */}
           <div style={{width:52,flexShrink:0,background:badgeBg,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"12px 0",gap:1}}>
@@ -434,6 +439,7 @@
           </div>
         </div>
 
+        {isSwapSource&&<div style={{padding:"8px 14px 10px 14px",fontSize:12,color:C.accent,fontWeight:600,display:"flex",alignItems:"center",gap:6}}><span style={{background:C.accent,color:"#fff",padding:"2px 8px",borderRadius:10,fontSize:10,letterSpacing:0.5}}>SOURCE</span> Jour sélectionné pour l'échange</div>}
         {swapTarget&&<div style={{padding:"0 14px 10px 66px",fontSize:12,color:C.accent2,fontStyle:"italic"}}>Toucher pour échanger le contenu</div>}
 
         {expanded&&!swapMode&&(
