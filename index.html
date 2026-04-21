@@ -29,7 +29,7 @@
   const KEY  = "tripplanner_v3";
   const SKEY = "tripplanner_settings";
   const DEF  = { name:"Mon Voyage", startDate:"", endDate:"", days:[], cards:[] };
-  const DEFS = { previewLines:2, fontSize:14, remoteUrl:"", theme:"light" };
+  const DEFS = { previewLines:2, fontSize:14, remoteUrl:"", theme:"light", gistId:"", gistToken:"", gistFilename:"voyage.json" };
 
   const uid   = () => Date.now().toString(36)+Math.random().toString(36).slice(2);
   const load  = () => { try { const s=localStorage.getItem(KEY);  return s?JSON.parse(s):DEF;           } catch { return DEF;  } };
@@ -287,6 +287,33 @@
         showToast("❌ Copie impossible");
       }
     };
+
+    /* Push current planning to GitHub gist */
+    const publishToGist = async () => {
+      const id = settings.gistId?.trim();
+      const token = settings.gistToken?.trim();
+      const filename = (settings.gistFilename?.trim() || "voyage.json");
+      if(!id || !token) { showToast("⚠️ Configure ton Gist ID et Token"); return; }
+      showToast("⏳ Publication...");
+      try {
+        const body = { files: { [filename]: { content: JSON.stringify(data,null,2) } } };
+        const res = await fetch(`https://api.github.com/gists/${encodeURIComponent(id)}`, {
+          method:"PATCH",
+          headers:{
+            "Authorization":`Bearer ${token}`,
+            "Accept":"application/vnd.github+json",
+            "Content-Type":"application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        if(res.status===401) { showToast("❌ Token invalide"); return; }
+        if(res.status===404) { showToast("❌ Gist introuvable ou accès refusé"); return; }
+        if(!res.ok) { showToast(`❌ Erreur ${res.status}`); return; }
+        showToast("✅ Gist publié !");
+      } catch {
+        showToast("❌ Connexion impossible");
+      }
+    };
     const importData = e => {
       const f=e.target.files[0]; if(!f) return;
       const r=new FileReader();
@@ -445,7 +472,7 @@
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.8</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.9</div>
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - 226px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:C.onAccent,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
@@ -454,7 +481,7 @@
         {toast&&<div style={{position:"fixed",top:`calc(12px + ${safeTop})`,left:"50%",transform:"translateX(-50%)",background:currentTheme==="dark"?"#2c2c2e":"#2c2418",borderRadius:10,padding:"10px 18px",fontSize:13,color:"#fff",zIndex:100,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.3)",border:`1px solid ${C.border}`}}>{toast}</div>}
 
         {/* Settings */}
-        {showSettings&&<SettingsPanel settings={settings} onChange={saveSettings} onClose={()=>setShowSettings(false)} safeBot={safeBot} exportData={exportData} importData={importData} loadFromUrl={loadFromUrl} copyJson={copyJson}/>}
+        {showSettings&&<SettingsPanel settings={settings} onChange={saveSettings} onClose={()=>setShowSettings(false)} safeBot={safeBot} exportData={exportData} importData={importData} loadFromUrl={loadFromUrl} copyJson={copyJson} publishToGist={publishToGist}/>}
 
         {/* Modal */}
         {modal&&<EditModal modal={modal} form={form} setForm={setForm} onClose={closeModal}
@@ -617,8 +644,9 @@
   }
 
   /* ════════ SETTINGS PANEL ════════ */
-  function SettingsPanel({settings,onChange,onClose,safeBot,exportData,importData,loadFromUrl,copyJson}) {
+  function SettingsPanel({settings,onChange,onClose,safeBot,exportData,importData,loadFromUrl,copyJson,publishToGist}) {
     const [showHelp, setShowHelp] = useState(false);
+    const [showToken, setShowToken] = useState(false);
     const lbl={fontSize:13,color:C.text,fontWeight:500};
     const val={fontSize:13,color:C.accent,fontWeight:600,minWidth:28,textAlign:"right"};
     const inp={width:"100%",padding:"10px 12px",borderRadius:9,background:C.surface2,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,outline:"none",minWidth:0};
@@ -633,26 +661,53 @@
             <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
           </div>
 
-          {/* ── Sauvegarde / Partage ── */}
+          {/* ── Publier sur Gist (côté organisateur) ── */}
           <div style={section}>
-            <div style={sectionTitle}><span>💾 Sauvegarde & Partage</span></div>
-            <button onClick={copyJson} style={{width:"100%",padding:"11px",borderRadius:9,background:C.accent,border:"none",color:C.onAccent,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:8}}>📋 Copier le JSON (pour Raccourci iOS)</button>
+            <div style={sectionTitle}>
+              <span>💾 Publier sur Gist</span>
+              <button onClick={()=>setShowHelp(true)} title="Comment ça marche ?" style={{background:"none",border:`1px solid ${C.accent}55`,borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:700,padding:0}}>i</button>
+            </div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.5}}>
+              Publie ton planning directement sur GitHub Gist en un tap. Ta famille clique sur 🔄 Actualiser depuis le lien pour récupérer la nouvelle version.
+            </div>
+            <button onClick={publishToGist} disabled={!settings.gistId?.trim()||!settings.gistToken?.trim()} style={{width:"100%",padding:"12px",borderRadius:9,background:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.surface,border:`1px solid ${(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.border2}`,color:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.onAccent:C.muted,fontSize:14,fontWeight:600,cursor:(settings.gistId?.trim()&&settings.gistToken?.trim())?"pointer":"default",marginBottom:12}}>📤 Publier maintenant</button>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6}}>Configuration</div>
+            <div style={{marginBottom:8}}>
+              <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>Gist ID</label>
+              <input style={inp} placeholder="ex: abc123def456..." value={settings.gistId||""} onChange={e=>onChange({...settings,gistId:e.target.value})}/>
+            </div>
+            <div style={{marginBottom:8}}>
+              <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>Token GitHub (fine-grained, scope Gist)</label>
+              <div style={{position:"relative"}}>
+                <input type={showToken?"text":"password"} style={{...inp,paddingRight:60}} placeholder="github_pat_..." value={settings.gistToken||""} onChange={e=>onChange({...settings,gistToken:e.target.value})}/>
+                <button onClick={()=>setShowToken(!showToken)} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.accent,fontSize:11,cursor:"pointer",padding:"4px 8px"}}>{showToken?"Masquer":"Afficher"}</button>
+              </div>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>Nom du fichier dans le gist</label>
+              <input style={inp} placeholder="voyage.json" value={settings.gistFilename||""} onChange={e=>onChange({...settings,gistFilename:e.target.value})}/>
+            </div>
+          </div>
+
+          {/* ── Fichier local ── */}
+          <div style={section}>
+            <div style={sectionTitle}><span>📁 Fichier local</span></div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={exportData} style={{flex:1,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer"}}>📤 Exporter fichier</button>
+              <button onClick={exportData} style={{flex:1,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer"}}>📤 Exporter</button>
               <label style={{flex:1,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer",textAlign:"center"}}>
-                📥 Importer fichier<input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
+                📥 Importer<input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
               </label>
             </div>
+            <button onClick={copyJson} style={{width:"100%",marginTop:8,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer"}}>📋 Copier le JSON</button>
           </div>
 
           {/* ── Import par lien ── */}
           <div style={section}>
             <div style={sectionTitle}>
-              <span>🔗 Lien partagé</span>
-              <button onClick={()=>setShowHelp(true)} title="Comment ça marche ?" style={{background:"none",border:`1px solid ${C.accent}55`,borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:700,padding:0}}>i</button>
+              <span>🔗 Lien partagé (lecture)</span>
             </div>
             <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.5}}>
-              Colle ici l'URL d'un fichier JSON partagé. Clique sur le bouton <strong>i</strong> pour voir comment créer ton lien.
+              Pour récupérer un planning publié par l'organisateur du voyage — colle ici l'URL raw du gist.
             </div>
             <input style={inp} placeholder="https://gist.githubusercontent.com/..." value={settings.remoteUrl||""} onChange={e=>onChange({...settings,remoteUrl:e.target.value})}/>
             <button onClick={()=>loadFromUrl(settings.remoteUrl)} disabled={!settings.remoteUrl?.trim()} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:9,background:settings.remoteUrl?.trim()?`${C.accent}18`:C.surface2,border:`1px solid ${settings.remoteUrl?.trim()?C.accent:C.border2}`,color:settings.remoteUrl?.trim()?C.accent:C.muted,fontSize:13,fontWeight:600,cursor:settings.remoteUrl?.trim()?"pointer":"default"}}>🔄 Actualiser depuis le lien</button>
@@ -712,35 +767,39 @@
         <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"92svh",overflowY:"auto",touchAction:"pan-y"}}>
           <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 20px"}}/>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Partager ton planning</div>
+            <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Publier sur Gist</div>
             <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
           </div>
-          <div style={p}>Cette fonction permet à ta famille de <strong>toujours avoir la dernière version</strong> de ton planning sans que tu aies à leur renvoyer le fichier à chaque modification. Le principe : tu héberges ton JSON en ligne avec une URL stable, ils s'y abonnent une fois.</div>
+          <div style={p}>Cette fonction permet de publier ton planning directement sur ton Gist GitHub en un tap. Après publication, ta famille clique sur 🔄 Actualiser dans leur app pour récupérer la dernière version.</div>
 
-          <div style={h}>🎯 Recommandé : GitHub Gist</div>
-          <div style={p}>GitHub Gist donne une URL <strong>qui ne change jamais</strong>, même si tu modifies le fichier 100 fois. Un compte gratuit est requis.</div>
+          <div style={h}>🔐 Pourquoi un token ?</div>
+          <div style={p}>Pour écrire sur ton gist, l'app a besoin d'un jeton d'authentification de ton compte GitHub. Ce token est stocké <strong>uniquement sur ton téléphone</strong> dans l'app, jamais envoyé ailleurs que sur GitHub.</div>
+          <div style={p}>Si tu utilises un <strong>fine-grained token</strong> limité à "Gists : read/write", le risque est minimal : même s'il était volé, il ne pourrait qu'éditer tes gists, rien d'autre.</div>
 
-          <div style={h}>📝 Comment faire (1ère fois)</div>
-          <div style={step}><span style={num}>1</span>Exporte ton planning avec le bouton 📤 Exporter</div>
-          <div style={step}><span style={num}>2</span>Va sur <span style={code}>gist.github.com</span> et crée un compte gratuit si nécessaire</div>
-          <div style={step}><span style={num}>3</span>Dans la page "New gist" : donne un nom au fichier (ex: <span style={code}>voyage.json</span>) et colle le contenu de ton JSON exporté</div>
-          <div style={step}><span style={num}>4</span>Clique sur <strong>"Create public gist"</strong></div>
-          <div style={step}><span style={num}>5</span>Sur la page du gist, clique sur le bouton <strong>"Raw"</strong> à droite du nom du fichier</div>
-          <div style={step}><span style={num}>6</span>Copie l'URL qui s'affiche dans ton navigateur — c'est <strong>cette URL</strong> que tu donnes à ta famille</div>
+          <div style={h}>📝 Étape 1 — Créer le Gist (1 fois)</div>
+          <div style={step}><span style={num}>1</span>Va sur <span style={code}>gist.github.com</span> (crée un compte gratuit si besoin)</div>
+          <div style={step}><span style={num}>2</span>Nom du fichier : <span style={code}>voyage.json</span></div>
+          <div style={step}><span style={num}>3</span>Contenu : mets juste <span style={code}>{"{}"}</span> — il sera écrasé dès ta première publication</div>
+          <div style={step}><span style={num}>4</span>Clique sur <strong>"Create secret gist"</strong> (recommandé)</div>
+          <div style={step}><span style={num}>5</span>Dans l'URL de la page du gist, copie le long ID après ton nom d'utilisateur (ex: <span style={code}>abc123def456...</span>) — c'est ton <strong>Gist ID</strong></div>
+          <div style={step}><span style={num}>6</span>Clique sur <strong>"Raw"</strong> à droite du nom du fichier, copie cette URL — c'est le lien à donner à ta famille pour leur 🔗 Lien partagé</div>
 
-          <div style={h}>🔄 Mises à jour suivantes</div>
-          <div style={step}><span style={num}>1</span>Retourne sur ton gist, clique sur <strong>"Edit"</strong></div>
-          <div style={step}><span style={num}>2</span>Remplace tout le contenu par ton nouveau JSON exporté</div>
-          <div style={step}><span style={num}>3</span>Clique sur <strong>"Update public gist"</strong> — l'URL ne change pas</div>
-          <div style={step}><span style={num}>4</span>Ta famille clique sur 🔄 Actualiser dans l'app pour récupérer la nouvelle version</div>
+          <div style={h}>🔑 Étape 2 — Créer le Token (1 fois)</div>
+          <div style={step}><span style={num}>1</span>Sur GitHub, clique sur ton avatar → <strong>Settings</strong></div>
+          <div style={step}><span style={num}>2</span>Tout en bas à gauche → <strong>Developer settings</strong></div>
+          <div style={step}><span style={num}>3</span><strong>Personal access tokens</strong> → <strong>Fine-grained tokens</strong> → <strong>Generate new token</strong></div>
+          <div style={step}><span style={num}>4</span>Nom : "Voyage App", expiration : 1 an</div>
+          <div style={step}><span style={num}>5</span>Dans <strong>Account permissions</strong>, cherche <strong>Gists</strong> → sélectionne <strong>Read and write</strong></div>
+          <div style={step}><span style={num}>6</span>Clique <strong>Generate token</strong> et <strong>copie le token immédiatement</strong> (il commence par <span style={code}>github_pat_</span>)</div>
+
+          <div style={h}>⚙️ Étape 3 — Configurer l'app</div>
+          <div style={step}><span style={num}>1</span>Dans cette section "Publier sur Gist", colle le <strong>Gist ID</strong></div>
+          <div style={step}><span style={num}>2</span>Colle le <strong>Token</strong></div>
+          <div style={step}><span style={num}>3</span>Laisse <span style={code}>voyage.json</span> comme nom de fichier (ou le nom que tu as choisi)</div>
+          <div style={step}><span style={num}>4</span>C'est tout ! Clique sur <strong>📤 Publier maintenant</strong> à chaque fois que tu veux mettre à jour</div>
 
           <div style={h}>📲 Pour ta famille</div>
-          <div style={step}><span style={num}>1</span>Dans l'app, ouvre les Paramètres ⚙️</div>
-          <div style={step}><span style={num}>2</span>Colle l'URL dans le champ "Lien partagé"</div>
-          <div style={step}><span style={num}>3</span>Clique sur 🔄 Actualiser — le planning se charge. À refaire à chaque fois qu'ils veulent la dernière version.</div>
-
-          <div style={h}>💡 Autres services supportés</div>
-          <div style={p}>L'app convertit automatiquement les liens provenant de <strong>Google Drive</strong> et <strong>Dropbox</strong>, mais ces services peuvent bloquer l'accès (erreur CORS). <strong>GitHub Gist reste le plus fiable.</strong></div>
+          <div style={p}>Envoie-leur juste l'URL raw du gist. Dans leur app, section <strong>🔗 Lien partagé</strong>, ils collent l'URL et cliquent sur 🔄 Actualiser à chaque fois qu'ils veulent ta dernière version. Ils n'ont pas besoin de token.</div>
 
           <button onClick={onClose} style={{width:"100%",marginTop:16,padding:"12px",borderRadius:10,background:C.accent,border:"none",color:C.onAccent,fontSize:14,fontWeight:600,cursor:"pointer"}}>J'ai compris</button>
         </div>
