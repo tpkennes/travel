@@ -21,6 +21,11 @@
     /* Prevent iOS auto-zoom on focus: inputs must be >=16px */
     input,textarea,select{font-size:16px}
     input[type="date"]{max-width:100%;min-width:0;width:100%;-webkit-appearance:none;appearance:none;-webkit-min-logical-width:calc(100% - 16px)}
+    /* Responsive max-width for main container */
+    :root{--app-max-width:100%}
+    @media (min-width:600px){ :root{--app-max-width:600px} }
+    @media (min-width:900px){ :root{--app-max-width:700px} }
+    @media (min-width:1200px){ :root{--app-max-width:800px} }
   </style>
 </head>
 <body>
@@ -419,7 +424,7 @@
     const safeBot = "max(24px, env(safe-area-inset-bottom))";
 
     return (
-      <div style={{fontFamily:C.font,background:C.bg,minHeight:"100svh",color:C.text,maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}>
+      <div style={{fontFamily:C.font,background:C.bg,minHeight:"100svh",color:C.text,maxWidth:"var(--app-max-width)",margin:"0 auto",display:"flex",flexDirection:"column"}}>
 
         {/* Header */}
         <div style={{paddingTop:safeTop,paddingLeft:20,paddingRight:20,background:C.bg,position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}}>
@@ -478,10 +483,10 @@
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.9.1</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.9.2</div>
 
         {/* FAB */}
-        <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - 226px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:C.onAccent,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
+        <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - var(--app-max-width) / 2 + 16px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:C.onAccent,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
 
         {/* Toast */}
         {toast&&<div style={{position:"fixed",top:`calc(12px + ${safeTop})`,left:"50%",transform:"translateX(-50%)",background:currentTheme==="dark"?"#2c2c2e":"#2c2418",borderRadius:10,padding:"10px 18px",fontSize:13,color:"#fff",zIndex:100,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.3)",border:`1px solid ${C.border}`}}>{toast}</div>}
@@ -660,7 +665,7 @@
     const sectionTitle={fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:1,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between"};
     return (
       <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
-        <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"90svh",overflowY:"auto",touchAction:"pan-y"}}>
+        <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"90svh",overflowY:"auto",touchAction:"pan-y",width:"100%",maxWidth:"var(--app-max-width)",margin:"0 auto"}}>
           <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 20px"}}/>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
             <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Paramètres</div>
@@ -770,7 +775,7 @@
     const num={position:"absolute",left:0,top:0,width:16,height:16,borderRadius:"50%",background:C.accent,color:C.onAccent,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"};
     return (
       <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:60,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
-        <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"92svh",overflowY:"auto",touchAction:"pan-y"}}>
+        <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"92svh",overflowY:"auto",touchAction:"pan-y",width:"100%",maxWidth:"var(--app-max-width)",margin:"0 auto"}}>
           <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 20px"}}/>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Publier sur Gist</div>
@@ -838,7 +843,7 @@
 
     return (
       <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
-        <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 24px)`,maxHeight:"90svh",overflowY:"auto",touchAction:"pan-y"}}>
+        <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 24px)`,maxHeight:"90svh",overflowY:"auto",touchAction:"pan-y",width:"100%",maxWidth:"var(--app-max-width)",margin:"0 auto"}}>
           <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 20px"}}/>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
             <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>
