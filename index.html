@@ -31,7 +31,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-  const { useState, useRef } = React;
+  const { useState, useRef, useEffect } = React;
 
   const KEY  = "tripplanner_v3";
   const SKEY = "tripplanner_settings";
@@ -251,6 +251,18 @@
     const [swapFor,setSwapFor]   = useState(null);
     const [toast,setToast]       = useState(null);
     const [showSettings,setShowSettings] = useState(false);
+    const [isLandscape,setIsLandscape] = useState(() => typeof window!=="undefined" && window.matchMedia("(orientation: landscape) and (max-height: 500px)").matches);
+
+    useEffect(() => {
+      const mq = window.matchMedia("(orientation: landscape) and (max-height: 500px)");
+      const handler = e => setIsLandscape(e.matches);
+      if(mq.addEventListener) mq.addEventListener("change", handler);
+      else mq.addListener(handler);
+      return () => {
+        if(mq.removeEventListener) mq.removeEventListener("change", handler);
+        else mq.removeListener(handler);
+      };
+    }, []);
 
     const save = nd => {
       setData(nd); setSyncing(true);
@@ -427,24 +439,45 @@
       <div style={{fontFamily:C.font,background:C.bg,minHeight:"100svh",color:C.text,maxWidth:"var(--app-max-width)",margin:"0 auto",display:"flex",flexDirection:"column"}}>
 
         {/* Header */}
-        <div style={{paddingTop:safeTop,paddingLeft:20,paddingRight:20,background:C.bg,position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}}>
-          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",paddingBottom:12}}>
-            <div onClick={()=>openModal("trip")} style={{cursor:"pointer",flex:1,minWidth:0}}>
-              <div style={{fontFamily:C.serif,fontSize:21,fontWeight:600,color:C.text,lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:10}}>{data.name}</div>
-              {tripLabel&&<div style={{fontSize:12,color:C.accent,marginTop:2,fontWeight:500}}>{tripLabel} · {data.days.length} jours</div>}
-              <div style={{fontSize:11,color:C.muted,marginTop:2}}>Toucher pour modifier</div>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:7,flexShrink:0,paddingTop:2}}>
-              <div style={{fontSize:11,color:syncing?C.accent:C.muted}}>{syncing?"⟳ Sync...":"✓ Sauvegardé"}</div>
-              <button onClick={()=>setShowSettings(true)} style={{padding:"6px 10px",borderRadius:8,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:14,cursor:"pointer"}}>⚙️</button>
+        {isLandscape ? (
+          /* COMPACT landscape header - all on one line */
+          <div style={{paddingTop:`calc(${safeTop} - 4px)`,paddingLeft:16,paddingRight:16,background:C.bg,position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,paddingTop:4,paddingBottom:2}}>
+              <div onClick={()=>openModal("trip")} style={{cursor:"pointer",flexShrink:1,minWidth:0,maxWidth:"35%"}}>
+                <div style={{fontFamily:C.serif,fontSize:15,fontWeight:600,color:C.text,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{data.name}</div>
+              </div>
+              <div style={{display:"flex",flex:1,justifyContent:"center",gap:16}}>
+                {[["days","📅 Programme"],["cards","📋 Infos"]].map(([id,label])=>(
+                  <button key={id} onClick={()=>setTab(id)} style={{padding:"6px 4px",background:"none",border:"none",cursor:"pointer",color:tab===id?C.accent:C.muted,fontSize:12,fontWeight:tab===id?600:400,borderBottom:tab===id?`2px solid ${C.accent}`:"2px solid transparent"}}>{label}</button>
+                ))}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2,flexShrink:0}}>
+                <div style={{fontSize:9,color:syncing?C.accent:C.muted}}>{syncing?"⟳":"✓"}</div>
+                <button onClick={()=>setShowSettings(true)} style={{padding:"3px 8px",borderRadius:7,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer"}}>⚙️</button>
+              </div>
             </div>
           </div>
-          <div style={{display:"flex",marginBottom:-1}}>
-            {[["days","📅 Programme"],["cards","📋 Infos voyage"]].map(([id,label])=>(
-              <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"10px 0 11px",background:"none",border:"none",cursor:"pointer",color:tab===id?C.accent:C.muted,fontSize:13,fontWeight:tab===id?600:400,borderBottom:tab===id?`2px solid ${C.accent}`:"2px solid transparent"}}>{label}</button>
-            ))}
+        ) : (
+          /* NORMAL portrait header */
+          <div style={{paddingTop:safeTop,paddingLeft:20,paddingRight:20,background:C.bg,position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",paddingBottom:12}}>
+              <div onClick={()=>openModal("trip")} style={{cursor:"pointer",flex:1,minWidth:0}}>
+                <div style={{fontFamily:C.serif,fontSize:21,fontWeight:600,color:C.text,lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:10}}>{data.name}</div>
+                {tripLabel&&<div style={{fontSize:12,color:C.accent,marginTop:2,fontWeight:500}}>{tripLabel} · {data.days.length} jours</div>}
+                <div style={{fontSize:11,color:C.muted,marginTop:2}}>Toucher pour modifier</div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:7,flexShrink:0,paddingTop:2}}>
+                <div style={{fontSize:11,color:syncing?C.accent:C.muted}}>{syncing?"⟳ Sync...":"✓ Sauvegardé"}</div>
+                <button onClick={()=>setShowSettings(true)} style={{padding:"6px 10px",borderRadius:8,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:14,cursor:"pointer"}}>⚙️</button>
+              </div>
+            </div>
+            <div style={{display:"flex",marginBottom:-1}}>
+              {[["days","📅 Programme"],["cards","📋 Infos voyage"]].map(([id,label])=>(
+                <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"10px 0 11px",background:"none",border:"none",cursor:"pointer",color:tab===id?C.accent:C.muted,fontSize:13,fontWeight:tab===id?600:400,borderBottom:tab===id?`2px solid ${C.accent}`:"2px solid transparent"}}>{label}</button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Swap banner */}
         {swapFor&&(
@@ -483,7 +516,7 @@
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.9.2</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.10.1</div>
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - var(--app-max-width) / 2 + 16px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:C.onAccent,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
@@ -657,11 +690,12 @@
   /* ════════ SETTINGS PANEL ════════ */
   function SettingsPanel({settings,onChange,onClose,safeBot,exportData,importData,loadFromUrl,copyJson,publishToGist}) {
     const [showHelp, setShowHelp] = useState(false);
+    const [showLocalHelp, setShowLocalHelp] = useState(false);
     const [showToken, setShowToken] = useState(false);
     const lbl={fontSize:13,color:C.text,fontWeight:500};
     const val={fontSize:13,color:C.accent,fontWeight:600,minWidth:28,textAlign:"right"};
     const inp={width:"100%",padding:"10px 12px",borderRadius:9,background:C.surface2,border:`1px solid ${C.border2}`,color:C.text,fontSize:16,outline:"none",minWidth:0};
-    const section={padding:"14px",borderRadius:11,background:C.surface2,border:`1px solid ${C.border}`,marginBottom:14};
+    const section={padding:"14px",borderRadius:11,background:C.surface2,border:`1.5px solid ${C.border2}`,marginBottom:14};
     const sectionTitle={fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:1,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between"};
     return (
       <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
@@ -678,10 +712,6 @@
               <span>💾 Publier sur Gist</span>
               <button onClick={()=>setShowHelp(true)} title="Comment ça marche ?" style={{background:"none",border:`1px solid ${C.accent}55`,borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:700,padding:0}}>i</button>
             </div>
-            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.5}}>
-              Publie ton planning directement sur GitHub Gist en un tap. Ta famille clique sur 🔄 Actualiser depuis le lien pour récupérer la nouvelle version.
-            </div>
-            <button onClick={publishToGist} disabled={!settings.gistId?.trim()||!settings.gistToken?.trim()} style={{width:"100%",padding:"12px",borderRadius:9,background:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.surface,border:`1px solid ${(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.border2}`,color:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.onAccent:C.muted,fontSize:14,fontWeight:600,cursor:(settings.gistId?.trim()&&settings.gistToken?.trim())?"pointer":"default",marginBottom:12}}>📤 Publier maintenant</button>
             <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6}}>Configuration</div>
             <div style={{marginBottom:8}}>
               <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>Gist ID</label>
@@ -694,25 +724,14 @@
                 <button onClick={()=>setShowToken(!showToken)} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.accent,fontSize:11,cursor:"pointer",padding:"4px 8px"}}>{showToken?"Masquer":"Afficher"}</button>
               </div>
             </div>
-            <div>
+            <div style={{marginBottom:12}}>
               <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>Nom du fichier dans le gist</label>
               <input style={inp} placeholder="voyage.json" value={settings.gistFilename||""} onChange={e=>onChange({...settings,gistFilename:e.target.value})}/>
             </div>
+            <button onClick={publishToGist} disabled={!settings.gistId?.trim()||!settings.gistToken?.trim()} style={{width:"100%",padding:"12px",borderRadius:9,background:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.surface,border:`1px solid ${(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.border2}`,color:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.onAccent:C.muted,fontSize:14,fontWeight:600,cursor:(settings.gistId?.trim()&&settings.gistToken?.trim())?"pointer":"default"}}>📤 Publier maintenant</button>
           </div>
 
-          {/* ── Fichier local ── */}
-          <div style={section}>
-            <div style={sectionTitle}><span>📁 Fichier local</span></div>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={exportData} style={{flex:1,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer"}}>📤 Exporter</button>
-              <label style={{flex:1,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer",textAlign:"center"}}>
-                📥 Importer<input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
-              </label>
-            </div>
-            <button onClick={copyJson} style={{width:"100%",marginTop:8,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer"}}>📋 Copier le JSON</button>
-          </div>
-
-          {/* ── Import par lien ── */}
+          {/* ── Import par lien (lecture) ── */}
           <div style={section}>
             <div style={sectionTitle}>
               <span>🔗 Lien partagé (lecture)</span>
@@ -722,6 +741,21 @@
             </div>
             <input style={inp} placeholder="https://gist.githubusercontent.com/..." value={settings.remoteUrl||""} onChange={e=>onChange({...settings,remoteUrl:e.target.value})}/>
             <button onClick={()=>loadFromUrl(settings.remoteUrl)} disabled={!settings.remoteUrl?.trim()} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:9,background:settings.remoteUrl?.trim()?`${C.accent}18`:C.surface2,border:`1px solid ${settings.remoteUrl?.trim()?C.accent:C.border2}`,color:settings.remoteUrl?.trim()?C.accent:C.muted,fontSize:13,fontWeight:600,cursor:settings.remoteUrl?.trim()?"pointer":"default"}}>🔄 Actualiser depuis le lien</button>
+          </div>
+
+          {/* ── Fichier local ── */}
+          <div style={section}>
+            <div style={sectionTitle}>
+              <span>📁 Fichier local</span>
+              <button onClick={()=>setShowLocalHelp(true)} title="À quoi servent ces boutons ?" style={{background:"none",border:`1px solid ${C.accent}55`,borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:700,padding:0}}>i</button>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={exportData} style={{flex:1,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer"}}>📤 Exporter</button>
+              <label style={{flex:1,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer",textAlign:"center"}}>
+                📥 Importer<input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
+              </label>
+            </div>
+            <button onClick={copyJson} style={{width:"100%",marginTop:8,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer"}}>📋 Copier le JSON</button>
           </div>
 
           {/* ── Affichage ── */}
@@ -737,8 +771,8 @@
             </div>
             <div style={{marginBottom:16}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={lbl}>Lignes de programme visibles</span><span style={val}>{settings.previewLines}</span></div>
-              <input type="range" min="1" max="6" step="1" value={settings.previewLines} onChange={e=>onChange({...settings,previewLines:parseInt(e.target.value)})} style={{width:"100%"}}/>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginTop:4}}><span>1</span><span>6</span></div>
+              <input type="range" min="1" max="8" step="1" value={settings.previewLines} onChange={e=>onChange({...settings,previewLines:parseInt(e.target.value)})} style={{width:"100%"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginTop:4}}><span>1</span><span>8</span></div>
             </div>
             <div>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={lbl}>Taille du texte</span><span style={val}>{settings.fontSize}px</span></div>
@@ -760,8 +794,9 @@
           </div>
         </div>
 
-        {/* Help modal */}
+        {/* Help modals */}
         {showHelp && <HelpLinkModal onClose={()=>setShowHelp(false)} safeBot={safeBot}/>}
+        {showLocalHelp && <HelpLocalModal onClose={()=>setShowLocalHelp(false)} safeBot={safeBot}/>}
       </div>
     );
   }
@@ -770,7 +805,7 @@
   function HelpLinkModal({onClose, safeBot}) {
     const h={fontFamily:C.serif,fontSize:15,fontWeight:600,color:C.accent,margin:"16px 0 8px"};
     const p={fontSize:13,color:C.text,lineHeight:1.65,marginBottom:8};
-    const code={background:C.surface2,padding:"2px 6px",borderRadius:4,fontFamily:"monospace",fontSize:12,color:C.accent,border:`1px solid ${C.border}`};
+    const code={background:C.surface2,padding:"2px 6px",borderRadius:4,fontFamily:"monospace",fontSize:12,color:C.accent,border:`1px solid ${C.border}`,wordBreak:"break-all"};
     const step={fontSize:13,color:C.text,lineHeight:1.65,marginBottom:10,paddingLeft:22,position:"relative"};
     const num={position:"absolute",left:0,top:0,width:16,height:16,borderRadius:"50%",background:C.accent,color:C.onAccent,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"};
     return (
@@ -791,9 +826,8 @@
           <div style={step}><span style={num}>1</span>Va sur <span style={code}>gist.github.com</span> (crée un compte gratuit si besoin)</div>
           <div style={step}><span style={num}>2</span>Nom du fichier : <span style={code}>voyage.json</span></div>
           <div style={step}><span style={num}>3</span>Contenu : mets juste <span style={code}>{"{}"}</span> — il sera écrasé dès ta première publication</div>
-          <div style={step}><span style={num}>4</span>Clique sur <strong>"Create secret gist"</strong> (recommandé)</div>
-          <div style={step}><span style={num}>5</span>Dans l'URL de la page du gist, copie le long ID après ton nom d'utilisateur (ex: <span style={code}>abc123def456...</span>) — c'est ton <strong>Gist ID</strong></div>
-          <div style={step}><span style={num}>6</span>Clique sur <strong>"Raw"</strong> à droite du nom du fichier, copie cette URL — c'est le lien à donner à ta famille pour leur 🔗 Lien partagé</div>
+          <div style={step}><span style={num}>4</span>Clique sur <strong>"Create secret gist"</strong> (recommandé pour confidentialité)</div>
+          <div style={step}><span style={num}>5</span>Dans l'URL de la page du gist, copie le long ID après ton nom d'utilisateur (ex: <span style={code}>abc123def456...</span>) — c'est ton <strong>Gist ID</strong>, à coller plus bas</div>
 
           <div style={h}>🔑 Étape 2 — Créer le Token (1 fois)</div>
           <div style={step}><span style={num}>1</span>Sur GitHub, clique sur ton avatar → <strong>Settings</strong></div>
@@ -804,13 +838,46 @@
           <div style={step}><span style={num}>6</span>Clique <strong>Generate token</strong> et <strong>copie le token immédiatement</strong> (il commence par <span style={code}>github_pat_</span>)</div>
 
           <div style={h}>⚙️ Étape 3 — Configurer l'app</div>
-          <div style={step}><span style={num}>1</span>Dans cette section "Publier sur Gist", colle le <strong>Gist ID</strong></div>
+          <div style={step}><span style={num}>1</span>Colle le <strong>Gist ID</strong> dans le champ Configuration</div>
           <div style={step}><span style={num}>2</span>Colle le <strong>Token</strong></div>
-          <div style={step}><span style={num}>3</span>Laisse <span style={code}>voyage.json</span> comme nom de fichier (ou le nom que tu as choisi)</div>
-          <div style={step}><span style={num}>4</span>C'est tout ! Clique sur <strong>📤 Publier maintenant</strong> à chaque fois que tu veux mettre à jour</div>
+          <div style={step}><span style={num}>3</span>Laisse <span style={code}>voyage.json</span> comme nom de fichier</div>
+          <div style={step}><span style={num}>4</span>Clique sur <strong>📤 Publier maintenant</strong> à chaque fois que tu veux mettre à jour</div>
 
-          <div style={h}>📲 Pour ta famille</div>
-          <div style={p}>Envoie-leur juste l'URL raw du gist. Dans leur app, section <strong>🔗 Lien partagé</strong>, ils collent l'URL et cliquent sur 🔄 Actualiser à chaque fois qu'ils veulent ta dernière version. Ils n'ont pas besoin de token.</div>
+          <div style={h}>📲 URL à donner à ta famille</div>
+          <div style={p}>Construis manuellement cette URL (elle pointe toujours vers la dernière version, contrairement au bouton "Raw" de GitHub qui donne une URL figée) :</div>
+          <div style={{...code,display:"block",padding:"8px 10px",marginBottom:12}}>https://gist.githubusercontent.com/TON_USERNAME/TON_GIST_ID/raw/voyage.json</div>
+          <div style={p}>Remplace <strong>TON_USERNAME</strong> par ton nom d'utilisateur GitHub et <strong>TON_GIST_ID</strong> par l'ID du gist. Envoie cette URL à ta famille — elle ne change jamais.</div>
+          <div style={p}>Dans leur app, ils la collent dans la section <strong>🔗 Lien partagé (lecture)</strong> et cliquent sur 🔄 Actualiser. Ils n'ont pas besoin de token.</div>
+          <div style={p}><em>Note : après publication, il peut y avoir un délai de quelques minutes avant que les changements soient visibles côté famille (cache GitHub).</em></div>
+
+          <button onClick={onClose} style={{width:"100%",marginTop:16,padding:"12px",borderRadius:10,background:C.accent,border:"none",color:C.onAccent,fontSize:14,fontWeight:600,cursor:"pointer"}}>J'ai compris</button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ════════ HELP LOCAL MODAL ════════ */
+  function HelpLocalModal({onClose, safeBot}) {
+    const h={fontFamily:C.serif,fontSize:15,fontWeight:600,color:C.accent,margin:"16px 0 8px"};
+    const p={fontSize:13,color:C.text,lineHeight:1.65,marginBottom:8};
+    return (
+      <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:60,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+        <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"92svh",overflowY:"auto",touchAction:"pan-y",width:"100%",maxWidth:"var(--app-max-width)",margin:"0 auto"}}>
+          <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 20px"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Fichier local</div>
+            <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
+          </div>
+          <div style={p}>Les 3 boutons de cette section permettent de manipuler ton planning comme un fichier JSON. Utile si tu ne passes pas par Gist, ou pour faire une sauvegarde locale.</div>
+
+          <div style={h}>📤 Exporter</div>
+          <div style={p}>Télécharge ton planning actuel sous forme de fichier <strong>.json</strong>. Le fichier arrive dans tes Téléchargements (ou ce que tu auras choisi). Pratique pour faire une sauvegarde ou pour l'envoyer à quelqu'un via WhatsApp, email, AirDrop, etc.</div>
+
+          <div style={h}>📥 Importer</div>
+          <div style={p}>Charge un fichier <strong>.json</strong> de planning dans l'app. <strong>Attention</strong> : cela <strong>écrase complètement</strong> ton planning actuel. À utiliser si tu reçois un planning de quelqu'un ou si tu veux restaurer une sauvegarde.</div>
+
+          <div style={h}>📋 Copier le JSON</div>
+          <div style={p}>Copie le contenu JSON de ton planning dans le presse-papiers de ton appareil. Tu peux ensuite le coller où tu veux (note, message, éditeur de texte, ou directement sur gist.github.com si tu préfères publier manuellement).</div>
 
           <button onClick={onClose} style={{width:"100%",marginTop:16,padding:"12px",borderRadius:10,background:C.accent,border:"none",color:C.onAccent,fontSize:14,fontWeight:600,cursor:"pointer"}}>J'ai compris</button>
         </div>
