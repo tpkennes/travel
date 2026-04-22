@@ -281,8 +281,11 @@
       const a=document.createElement("a");
       a.href=url;
       a.download=(data.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()||"voyage")+".json";
+      document.body.appendChild(a);
       a.click();
-      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      document.body.removeChild(a);
+      // Revoke after a short delay to let the browser start downloading
+      setTimeout(()=>URL.revokeObjectURL(url),1500);
     };
     const copyJson = async () => {
       const text = JSON.stringify(data,null,2);
@@ -446,7 +449,7 @@
               <div onClick={()=>openModal("trip")} style={{cursor:"pointer",flexShrink:1,minWidth:0,maxWidth:"35%"}}>
                 <div style={{fontFamily:C.serif,fontSize:15,fontWeight:600,color:C.text,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{data.name}</div>
               </div>
-              <div style={{display:"flex",flex:1,justifyContent:"center",gap:16}}>
+              <div style={{display:"flex",flex:1,justifyContent:"center",gap:16,marginBottom:-1}}>
                 {[["days","📅 Programme"],["cards","📋 Infos"]].map(([id,label])=>(
                   <button key={id} onClick={()=>setTab(id)} style={{padding:"6px 4px",background:"none",border:"none",cursor:"pointer",color:tab===id?C.accent:C.muted,fontSize:12,fontWeight:tab===id?600:400,borderBottom:tab===id?`2px solid ${C.accent}`:"2px solid transparent"}}>{label}</button>
                 ))}
@@ -516,7 +519,7 @@
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.10.1</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.10.2</div>
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - var(--app-max-width) / 2 + 16px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:C.onAccent,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
@@ -728,7 +731,7 @@
               <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>Nom du fichier dans le gist</label>
               <input style={inp} placeholder="voyage.json" value={settings.gistFilename||""} onChange={e=>onChange({...settings,gistFilename:e.target.value})}/>
             </div>
-            <button onClick={publishToGist} disabled={!settings.gistId?.trim()||!settings.gistToken?.trim()} style={{width:"100%",padding:"12px",borderRadius:9,background:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.surface,border:`1px solid ${(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.border2}`,color:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.onAccent:C.muted,fontSize:14,fontWeight:600,cursor:(settings.gistId?.trim()&&settings.gistToken?.trim())?"pointer":"default"}}>📤 Publier maintenant</button>
+            <button onClick={publishToGist} disabled={!settings.gistId?.trim()||!settings.gistToken?.trim()} style={{width:"100%",padding:"12px",borderRadius:9,background:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.surface,border:`1px solid ${(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.border2}`,color:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.onAccent:C.muted,fontSize:14,fontWeight:600,cursor:(settings.gistId?.trim()&&settings.gistToken?.trim())?"pointer":"not-allowed",opacity:(settings.gistId?.trim()&&settings.gistToken?.trim())?1:0.7}}>📤 Publier maintenant</button>
           </div>
 
           {/* ── Import par lien (lecture) ── */}
@@ -740,7 +743,7 @@
               Pour récupérer un planning publié par l'organisateur du voyage — colle ici l'URL raw du gist.
             </div>
             <input style={inp} placeholder="https://gist.githubusercontent.com/..." value={settings.remoteUrl||""} onChange={e=>onChange({...settings,remoteUrl:e.target.value})}/>
-            <button onClick={()=>loadFromUrl(settings.remoteUrl)} disabled={!settings.remoteUrl?.trim()} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:9,background:settings.remoteUrl?.trim()?`${C.accent}18`:C.surface2,border:`1px solid ${settings.remoteUrl?.trim()?C.accent:C.border2}`,color:settings.remoteUrl?.trim()?C.accent:C.muted,fontSize:13,fontWeight:600,cursor:settings.remoteUrl?.trim()?"pointer":"default"}}>🔄 Actualiser depuis le lien</button>
+            <button onClick={()=>loadFromUrl(settings.remoteUrl)} disabled={!settings.remoteUrl?.trim()} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:9,background:settings.remoteUrl?.trim()?`${C.accent}18`:C.surface2,border:`1px solid ${settings.remoteUrl?.trim()?C.accent:C.border2}`,color:settings.remoteUrl?.trim()?C.accent:C.muted,fontSize:13,fontWeight:600,cursor:settings.remoteUrl?.trim()?"pointer":"not-allowed",opacity:settings.remoteUrl?.trim()?1:0.7}}>🔄 Actualiser depuis le lien</button>
           </div>
 
           {/* ── Fichier local ── */}
