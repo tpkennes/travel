@@ -251,6 +251,8 @@
     const [swapFor,setSwapFor]   = useState(null);
     const [toast,setToast]       = useState(null);
     const [showSettings,setShowSettings] = useState(false);
+    const [showArchivedDays,setShowArchivedDays] = useState(false);
+    const [showArchivedCards,setShowArchivedCards] = useState(false);
     const [isLandscape,setIsLandscape] = useState(() => typeof window!=="undefined" && window.matchMedia("(orientation: landscape) and (max-height: 500px)").matches);
 
     useEffect(() => {
@@ -421,6 +423,9 @@
       save({...data,cards});
     };
 
+    const toggleArchiveDay  = id => save({...data,days: data.days.map(d=>d.id===id?{...d,archived:!d.archived}:d)});
+    const toggleArchiveCard = id => save({...data,cards:data.cards.map(c=>c.id===id?{...c,archived:!c.archived}:c)});
+
     const startSwap = id => { setSwapFor(id); setExpanded(null); };
     const doSwap = targetId => {
       const src=data.days.find(d=>d.id===swapFor);
@@ -492,34 +497,74 @@
 
         {/* Content */}
         <div style={{flex:1,padding:"14px",paddingBottom:`calc(72px + ${safeBot})`}}>
-          {tab==="days"&&(
-            data.days.length===0
-              ?<Empty icon="✈️" text="Aucun jour planifié" sub="Ouvre 'Modifier' et génère les jours depuis les dates du voyage"/>
-              :data.days.map((day,i)=>(
-                <DayCard key={day.id} day={day} index={i} total={data.days.length}
-                  expanded={expandedId===day.id}
-                  swapMode={!!swapFor} isSwapSource={swapFor===day.id}
-                  previewLines={settings.previewLines} fontSize={settings.fontSize}
-                  onToggle={()=>{if(swapFor&&swapFor!==day.id){doSwap(day.id);}else{setExpanded(expandedId===day.id?null:day.id);}}}
-                  onEdit={()=>openModal("day",day)}
-                  onMove={dir=>moveDay(day.id,dir)}
-                  onSwap={()=>startSwap(day.id)}/>
-              ))
-          )}
-          {tab==="cards"&&(
-            data.cards.length===0
-              ?<Empty icon="📋" text="Aucune info ajoutée" sub="Appuie sur + pour ajouter une info ou une liste TODO"/>
-              :data.cards.map((card,i)=>(
-                <InfoCard key={card.id} card={card} index={i} total={data.cards.length}
-                  onEdit={()=>openModal("card",card)}
-                  onMove={dir=>moveCard(card.id,dir)}
-                  onToggleTodo={(todoId)=>toggleTodo(card.id,todoId)}/>
-              ))
-          )}
+          {tab==="days"&&(() => {
+            const activeDays   = data.days.filter(d => !d.archived);
+            const archivedDays = data.days.filter(d =>  d.archived);
+            if(data.days.length===0) return <Empty icon="✈️" text="Aucun jour planifié" sub="Ouvre 'Modifier' et génère les jours depuis les dates du voyage"/>;
+            return (
+              <>
+                {activeDays.map((day,i)=>(
+                  <DayCard key={day.id} day={day} index={data.days.indexOf(day)} total={data.days.length}
+                    expanded={expandedId===day.id}
+                    swapMode={!!swapFor} isSwapSource={swapFor===day.id}
+                    previewLines={settings.previewLines} fontSize={settings.fontSize}
+                    onToggle={()=>{if(swapFor&&swapFor!==day.id){doSwap(day.id);}else{setExpanded(expandedId===day.id?null:day.id);}}}
+                    onEdit={()=>openModal("day",day)}
+                    onMove={dir=>moveDay(day.id,dir)}
+                    onSwap={()=>startSwap(day.id)}
+                    onArchive={()=>toggleArchiveDay(day.id)}/>
+                ))}
+                {archivedDays.length>0 && (
+                  <div style={{margin:"8px 0"}}>
+                    <button onClick={()=>setShowArchivedDays(!showArchivedDays)} style={{width:"100%",padding:"10px",borderRadius:8,background:"transparent",border:`1px dashed ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer",fontWeight:500}}>📦 {showArchivedDays?"Masquer":"Afficher"} les {archivedDays.length} jour{archivedDays.length>1?"s":""} archivé{archivedDays.length>1?"s":""}</button>
+                  </div>
+                )}
+                {showArchivedDays && archivedDays.map(day=>(
+                  <DayCard key={day.id} day={day} index={data.days.indexOf(day)} total={data.days.length}
+                    expanded={expandedId===day.id}
+                    swapMode={!!swapFor} isSwapSource={swapFor===day.id}
+                    previewLines={settings.previewLines} fontSize={settings.fontSize}
+                    onToggle={()=>{if(swapFor&&swapFor!==day.id){doSwap(day.id);}else{setExpanded(expandedId===day.id?null:day.id);}}}
+                    onEdit={()=>openModal("day",day)}
+                    onMove={dir=>moveDay(day.id,dir)}
+                    onSwap={()=>startSwap(day.id)}
+                    onArchive={()=>toggleArchiveDay(day.id)}/>
+                ))}
+              </>
+            );
+          })()}
+          {tab==="cards"&&(() => {
+            const activeCards   = data.cards.filter(c => !c.archived);
+            const archivedCards = data.cards.filter(c =>  c.archived);
+            if(data.cards.length===0) return <Empty icon="📋" text="Aucune info ajoutée" sub="Appuie sur + pour ajouter une info ou une liste TODO"/>;
+            return (
+              <>
+                {activeCards.map(card=>(
+                  <InfoCard key={card.id} card={card} index={data.cards.indexOf(card)} total={data.cards.length}
+                    onEdit={()=>openModal("card",card)}
+                    onMove={dir=>moveCard(card.id,dir)}
+                    onToggleTodo={(todoId)=>toggleTodo(card.id,todoId)}
+                    onArchive={()=>toggleArchiveCard(card.id)}/>
+                ))}
+                {archivedCards.length>0 && (
+                  <div style={{margin:"8px 0"}}>
+                    <button onClick={()=>setShowArchivedCards(!showArchivedCards)} style={{width:"100%",padding:"10px",borderRadius:8,background:"transparent",border:`1px dashed ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer",fontWeight:500}}>📦 {showArchivedCards?"Masquer":"Afficher"} les {archivedCards.length} info{archivedCards.length>1?"s":""} archivée{archivedCards.length>1?"s":""}</button>
+                  </div>
+                )}
+                {showArchivedCards && archivedCards.map(card=>(
+                  <InfoCard key={card.id} card={card} index={data.cards.indexOf(card)} total={data.cards.length}
+                    onEdit={()=>openModal("card",card)}
+                    onMove={dir=>moveCard(card.id,dir)}
+                    onToggleTodo={(todoId)=>toggleTodo(card.id,todoId)}
+                    onArchive={()=>toggleArchiveCard(card.id)}/>
+                ))}
+              </>
+            );
+          })()}
         </div>
 
         {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.10.3</div>
+        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.11</div>
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - var(--app-max-width) / 2 + 16px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:C.onAccent,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
@@ -550,7 +595,8 @@
   }
 
   /* ════════ DAY CARD ════════ */
-  function DayCard({day,index,total,expanded,swapMode,isSwapSource,previewLines,fontSize,onToggle,onEdit,onMove,onSwap}) {
+  function DayCard({day,index,total,expanded,swapMode,isSwapSource,previewLines,fontSize,onToggle,onEdit,onMove,onSwap,onArchive}) {
+    const isArchived = !!day.archived;
     const allLines  = (day.planning||"").split("\n").filter(Boolean);
     const hasPlan   = allLines.length>0;
     const hasNotes  = !!day.notes?.trim();
@@ -569,7 +615,7 @@
     const borderLeft= isSwapSource ? `7px solid ${C.accent}` : swapTarget ? `2px solid ${C.accent2}` : "3px solid transparent";
 
     return (
-      <div style={{marginBottom:12,borderRadius:12,background:cardBg,border:`${borderW}px solid ${cardBorder}`,borderLeft,overflow:"hidden",transition:"all 0.15s",boxShadow: isSwapSource?`0 4px 16px ${C.accent}40`:"0 2px 8px rgba(0,0,0,0.07)"}}>
+      <div style={{marginBottom:12,borderRadius:12,background:cardBg,border:`${borderW}px solid ${cardBorder}`,borderLeft,overflow:"hidden",transition:"all 0.15s",boxShadow: isSwapSource?`0 4px 16px ${C.accent}40`:"0 2px 8px rgba(0,0,0,0.07)",opacity:isArchived?0.55:1,filter:isArchived?"grayscale(0.5)":"none"}}>
         <div onClick={onToggle} style={{display:"flex",alignItems:"stretch",cursor:"pointer"}}>
           {/* Badge date */}
           <div style={{width:52,flexShrink:0,background:badgeBg,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"12px 0",gap:1}}>
@@ -579,17 +625,22 @@
           </div>
           {/* Preview */}
           <div style={{flex:1,minWidth:0,padding:"12px 12px 12px 14px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
-            {!expanded&&hasPlan
+            {isArchived
+              ?<div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:10,fontWeight:700,color:C.muted,background:`${C.muted}22`,padding:"2px 8px",borderRadius:10,letterSpacing:0.5,textTransform:"uppercase"}}>📦 Archivé</span>
+                <span style={{fontSize:12,color:C.muted,textTransform:"capitalize",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fmtLong(day.date)}</span>
+               </div>
+              :!expanded&&hasPlan
               ?<div>{renderBlock(previewContent,fontSize,false)}</div>
               :!expanded&&<div style={{fontSize:fontSize-1,color:C.muted,fontStyle:"italic"}}>Journée vide</div>
             }
-            {expanded&&<div style={{fontSize:12,color:C.muted,textTransform:"capitalize"}}>{fmtLong(day.date)}</div>}
+            {expanded&&!isArchived&&<div style={{fontSize:12,color:C.muted,textTransform:"capitalize"}}>{fmtLong(day.date)}</div>}
           </div>
           {/* Dots + chevron */}
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,padding:"0 12px",flexShrink:0}}>
             <div style={{display:"flex",gap:4}}>
-              {hasPlan &&<div style={{width:5,height:5,borderRadius:"50%",background:C.accent}}/>}
-              {hasNotes&&<div style={{width:5,height:5,borderRadius:"50%",background:C.accent2}}/>}
+              {!isArchived&&hasPlan &&<div style={{width:5,height:5,borderRadius:"50%",background:C.accent}}/>}
+              {!isArchived&&hasNotes&&<div style={{width:5,height:5,borderRadius:"50%",background:C.accent2}}/>}
             </div>
             <div style={{color:C.muted,fontSize:10}}>{expanded?"▲":"▼"}</div>
           </div>
@@ -613,9 +664,10 @@
                 {renderBlock(day.notes,fontSize,true)}
               </div>
             )}
-            <div style={{display:"flex",gap:8,marginTop:4}}>
-              <button onClick={onEdit}  style={{flex:1,padding:"9px 0",borderRadius:9,background:`${C.accent}12`,border:`1px solid ${C.accent}30`,color:C.accent,fontSize:13,cursor:"pointer",fontWeight:500}}>✏️ Modifier</button>
-              <button onClick={onSwap}  style={{flex:1,padding:"9px 0",borderRadius:9,background:`${C.accent2}12`,border:`1px solid ${C.accent2}30`,color:C.accent2,fontSize:13,cursor:"pointer",fontWeight:500}}>↔ Échanger</button>
+            <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}}>
+              <button onClick={onEdit}     style={{flex:"1 1 auto",minWidth:90,padding:"9px 0",borderRadius:9,background:`${C.accent}12`,border:`1px solid ${C.accent}30`,color:C.accent,fontSize:13,cursor:"pointer",fontWeight:500}}>✏️ Modifier</button>
+              <button onClick={onSwap}     style={{flex:"1 1 auto",minWidth:90,padding:"9px 0",borderRadius:9,background:`${C.accent2}12`,border:`1px solid ${C.accent2}30`,color:C.accent2,fontSize:13,cursor:"pointer",fontWeight:500}}>↔ Échanger</button>
+              <button onClick={onArchive}  style={{flex:"1 1 auto",minWidth:90,padding:"9px 0",borderRadius:9,background:`${C.muted}12`,border:`1px solid ${C.muted}30`,color:C.muted,fontSize:13,cursor:"pointer",fontWeight:500}}>{isArchived?"↩ Désarchiver":"📦 Archiver"}</button>
               <button onClick={()=>onMove(-1)} disabled={index===0}       style={{width:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,color:index===0?C.border:C.muted,fontSize:14,cursor:index===0?"default":"pointer"}}>↑</button>
               <button onClick={()=>onMove(1)}  disabled={index===total-1} style={{width:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,color:index===total-1?C.border:C.muted,fontSize:14,cursor:index===total-1?"default":"pointer"}}>↓</button>
             </div>
@@ -626,8 +678,9 @@
   }
 
   /* ════════ INFO CARD ════════ */
-  function InfoCard({card,index,total,onEdit,onMove,onToggleTodo}) {
+  function InfoCard({card,index,total,onEdit,onMove,onToggleTodo,onArchive}) {
     const [open,setOpen] = useState(false);
+    const isArchived = !!card.archived;
     const isTodo = card.kind==="todo";
     const badgeHex = card.color?BADGE_COLORS.find(c=>c.id===card.color)?.hex:null;
     const iconBg   = badgeHex?badgeHex:`${C.accent2}12`;
@@ -643,19 +696,20 @@
       : stripMd((card.content||"").split("\n").filter(Boolean)[0]||"");
 
     return (
-      <div style={{marginBottom:12,borderRadius:12,background:C.surface,border:`1px solid ${C.border}`,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+      <div style={{marginBottom:12,borderRadius:12,background:C.surface,border:`1px solid ${C.border}`,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)",opacity:isArchived?0.55:1,filter:isArchived?"grayscale(0.5)":"none"}}>
         <div onClick={()=>setOpen(!open)} style={{padding:"13px 14px",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
           <div style={{width:36,height:36,borderRadius:9,flexShrink:0,background:iconBg,border:iconBorder,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,color:iconColor}}>
             {isTodo?"☑":"📋"}
           </div>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:500,fontSize:14,color:C.text,display:"flex",alignItems:"center",gap:8}}>
+            <div style={{fontWeight:500,fontSize:14,color:C.text,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
               {card.title||"Sans titre"}
-              {isTodo&&totalCount>0&&(
+              {isArchived&&<span style={{fontSize:10,fontWeight:700,color:C.muted,background:`${C.muted}22`,padding:"2px 8px",borderRadius:10,letterSpacing:0.5,textTransform:"uppercase"}}>📦 Archivé</span>}
+              {!isArchived&&isTodo&&totalCount>0&&(
                 <span style={{fontSize:11,color:doneCount===totalCount?C.accent2:C.muted,fontWeight:400}}>{doneCount}/{totalCount}</span>
               )}
             </div>
-            {!open&&preview&&<div style={{fontSize:12,color:C.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview}</div>}
+            {!open&&!isArchived&&preview&&<div style={{fontSize:12,color:C.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview}</div>}
           </div>
           <div style={{color:C.muted,fontSize:10}}>{open?"▲":"▼"}</div>
         </div>
@@ -679,8 +733,9 @@
             ):(
               <div style={{marginBottom:14}}>{renderBlock(card.content,14,true)}</div>
             )}
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={onEdit} style={{flex:1,padding:"9px 0",borderRadius:9,background:`${C.accent2}12`,border:`1px solid ${C.accent2}30`,color:C.accent2,fontSize:13,cursor:"pointer",fontWeight:500}}>✏️ Modifier</button>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={onEdit}    style={{flex:"1 1 auto",minWidth:90,padding:"9px 0",borderRadius:9,background:`${C.accent2}12`,border:`1px solid ${C.accent2}30`,color:C.accent2,fontSize:13,cursor:"pointer",fontWeight:500}}>✏️ Modifier</button>
+              <button onClick={onArchive} style={{flex:"1 1 auto",minWidth:90,padding:"9px 0",borderRadius:9,background:`${C.muted}12`,border:`1px solid ${C.muted}30`,color:C.muted,fontSize:13,cursor:"pointer",fontWeight:500}}>{isArchived?"↩ Désarchiver":"📦 Archiver"}</button>
               <button onClick={()=>onMove(-1)} disabled={index===0}       style={{width:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,color:index===0?C.border:C.muted,fontSize:14,cursor:index===0?"default":"pointer"}}>↑</button>
               <button onClick={()=>onMove(1)}  disabled={index===total-1} style={{width:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,color:index===total-1?C.border:C.muted,fontSize:14,cursor:index===total-1?"default":"pointer"}}>↓</button>
             </div>
