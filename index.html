@@ -6,16 +6,9 @@
   <meta name="theme-color" content="#f5f0e8"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
-  <meta name="apple-mobile-web-app-title" content="Voyage"/>
-  <title>Mon Planning Voyage</title>
-  <script>
-    if('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .catch(() => { /* SW registration failed silently */ });
-      });
-    }
-  </script>
+  <meta name="apple-mobile-web-app-title" content="Planning Voyage"/>
+  <link rel="manifest" href="manifest.json"/>
+  <title>Planning Voyage v2</title>
   <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet"/>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -26,14 +19,34 @@
     #root{height:100%}
     ::-webkit-scrollbar{display:none}
     input,textarea,button,label{font-family:inherit}
-    /* Prevent iOS auto-zoom on focus: inputs must be >=16px */
     input,textarea,select{font-size:16px}
     input[type="date"]{max-width:100%;min-width:0;width:100%;-webkit-appearance:none;appearance:none;-webkit-min-logical-width:calc(100% - 16px)}
-    /* Responsive max-width for main container */
     :root{--app-max-width:100%}
-    @media (min-width:600px){ :root{--app-max-width:600px} }
-    @media (min-width:900px){ :root{--app-max-width:700px} }
-    @media (min-width:1200px){ :root{--app-max-width:800px} }
+    @media(min-width:600px){:root{--app-max-width:680px}}
+    @media(min-width:900px){:root{--app-max-width:780px}}
+    @media(min-width:1200px){:root{--app-max-width:860px}}
+
+    /* Table styles */
+    .day-table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
+    .day-table thead th{position:sticky;top:0;z-index:5;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;border-bottom:2px solid var(--border2);background:var(--bg);white-space:nowrap;overflow:hidden}
+    .day-row{cursor:pointer;transition:background 0.12s,opacity 0.2s}
+    .day-row:hover{background:var(--hover)}
+    .day-row td{padding:0;border-bottom:2px solid var(--border2);vertical-align:middle;overflow:hidden;transition:background 0.15s,opacity 0.2s}
+
+    /* Dimmed state — when another card is open */
+    .day-row.dimmed{opacity:var(--dim-opacity)}
+    .day-row.dimmed td{border-bottom-color:var(--border)}
+
+    /* Expanded header row — top + right only (left already colored by inline bar) */
+    .day-row.expanded td{border-bottom:none;background:var(--surface) !important}
+    .day-row.expanded td{border-top:2px solid var(--row-color)}
+    .day-row.expanded td:last-child{border-right:2px solid var(--row-color)}
+
+    /* Expanded detail row — right + bottom only */
+    .day-detail td{padding:0;background:var(--surface) !important}
+    .day-detail td{border-bottom:2px solid var(--row-color)}
+    .day-detail td:last-child{border-right:2px solid var(--row-color)}
+
   </style>
 </head>
 <body>
@@ -44,7 +57,7 @@
   const KEY  = "tripplanner_v3";
   const SKEY = "tripplanner_settings";
   const DEF  = { name:"Mon Voyage", startDate:"", endDate:"", days:[], cards:[] };
-  const DEFS = { previewLines:2, fontSize:14, remoteUrl:"", theme:"light", gistId:"", gistToken:"", gistFilename:"voyage.json" };
+  const DEFS = { previewLines:2, fontSize:14, theme:"light", workerUrl:"", workerToken:"", remoteUrl:"" };
 
   const uid   = () => Date.now().toString(36)+Math.random().toString(36).slice(2);
   const load  = () => { try { const s=localStorage.getItem(KEY);  return s?JSON.parse(s):DEF;           } catch { return DEF;  } };
@@ -56,14 +69,18 @@
       border:"#e2d9cc", border2:"#cdc3b4",
       accent:"#c4622a", accent2:"#2a7fa8",
       text:"#2c2418", muted:"#8a7e6e", danger:"#b83030",
-      onAccent:"#ffffff",
+      onAccent:"#ffffff", hover:"#f0ebe0",
+      tableHead:"#ede8df", rowAlt:"#faf7f2",
+      detailBg:"#f7f3ec", dimOpacity:"0.35",
     },
     dark: {
       bg:"#0f0f0f", surface:"#1c1c1e", surface2:"#242426",
       border:"#2e2e30", border2:"#3c3c3e",
       accent:"#e88a56", accent2:"#5aa8d4",
       text:"#ededed", muted:"#8e8e93", danger:"#ff6b6b",
-      onAccent:"#0f0f0f",
+      onAccent:"#0f0f0f", hover:"#252527",
+      tableHead:"#1a1a1c", rowAlt:"#1f1f21",
+      detailBg:"#1a1a1c", dimOpacity:"0.45",
     },
   };
 
@@ -76,11 +93,11 @@
       { id:"amber",  hex:"#b7770d", label:"Ambre"        },
     ],
     dark: [
-      { id:"red",    hex:"#e74c3c", label:"Rouge"        },
-      { id:"blue",   hex:"#3498db", label:"Bleu"         },
-      { id:"green",  hex:"#2ecc71", label:"Vert"         },
-      { id:"purple", hex:"#9b59b6", label:"Violet"       },
-      { id:"amber",  hex:"#f39c12", label:"Ambre"        },
+      { id:"red",    hex:"#e74c3c", label:"Rouge"   },
+      { id:"blue",   hex:"#3498db", label:"Bleu"    },
+      { id:"green",  hex:"#2ecc71", label:"Vert"    },
+      { id:"purple", hex:"#9b59b6", label:"Violet"  },
+      { id:"amber",  hex:"#f39c12", label:"Ambre"   },
     ],
   };
 
@@ -89,11 +106,9 @@
     dark:  { r:"#ff6b6b", o:"#ffa94d", b:"#5aa8d4", v:"#51cf66", f:"#ff6b9d", m:"#b983e0", t:"#4fd1c5", d:"#fcc419" },
   };
 
-  /* Font is theme-agnostic */
   const FONT = "'DM Sans',sans-serif";
   const SERIF = "'Lora',serif";
 
-  /* Mutable theme state — initialized from localStorage */
   let currentTheme = (() => {
     try { const s = localStorage.getItem(SKEY); return s ? (JSON.parse(s).theme||"light") : "light"; }
     catch { return "light"; }
@@ -112,12 +127,12 @@
     document.body.style.background = C.bg;
     document.documentElement.style.colorScheme = name;
     document.documentElement.style.setProperty("--range-accent", C.accent);
+    document.documentElement.style.setProperty("--bg", C.bg);
+    document.documentElement.style.setProperty("--border", C.border);
+    document.documentElement.style.setProperty("--border2", C.border2);
+    document.documentElement.style.setProperty("--hover", C.hover);
     let styleEl = document.getElementById("dyn-theme-style");
-    if(!styleEl) {
-      styleEl = document.createElement("style");
-      styleEl.id = "dyn-theme-style";
-      document.head.appendChild(styleEl);
-    }
+    if(!styleEl) { styleEl = document.createElement("style"); styleEl.id = "dyn-theme-style"; document.head.appendChild(styleEl); }
     styleEl.textContent = `input[type="range"]{accent-color:${C.accent}}`;
     const meta = document.querySelector('meta[name="theme-color"]');
     if(meta) meta.setAttribute("content", C.bg);
@@ -127,6 +142,7 @@
   const fmtShort = iso => iso ? new Intl.DateTimeFormat("fr-FR",{day:"numeric",month:"short"}).format(new Date(iso+"T12:00:00")) : "";
   const fmtNum   = iso => iso ? new Date(iso+"T12:00:00").getDate() : "—";
   const fmtMon   = iso => iso ? new Intl.DateTimeFormat("fr-FR",{month:"short"}).format(new Date(iso+"T12:00:00")) : "";
+  const fmtDay   = iso => iso ? new Intl.DateTimeFormat("fr-FR",{weekday:"short"}).format(new Date(iso+"T12:00:00")) : "";
   const fmtInit  = iso => iso ? new Intl.DateTimeFormat("fr-FR",{weekday:"long"}).format(new Date(iso+"T12:00:00")).charAt(0).toUpperCase() : "";
 
   const buildDays = (s,e) => {
@@ -253,7 +269,11 @@
     const [, forceRerender]      = useState(0);
     const [tab,setTab]           = useState("days");
     const [syncing,setSyncing]   = useState(false);
-    const [expandedId,setExpanded]= useState(null);
+    const [expandedId,setExpanded]    = useState(null);
+    const [expandedCardId,setExpandedCard] = useState(null);
+    const [searchQuery,setSearchQuery]     = useState("");
+    const [showSearch,setShowSearch]       = useState(false);
+    const [confirm,setConfirm]             = useState(null); // {message, onConfirm}
     const [modal,setModal]       = useState(null);
     const [form,setForm]         = useState({});
     const [swapFor,setSwapFor]   = useState(null);
@@ -261,18 +281,6 @@
     const [showSettings,setShowSettings] = useState(false);
     const [showArchivedDays,setShowArchivedDays] = useState(false);
     const [showArchivedCards,setShowArchivedCards] = useState(false);
-    const [isLandscape,setIsLandscape] = useState(() => typeof window!=="undefined" && window.matchMedia("(orientation: landscape) and (max-height: 500px)").matches);
-
-    useEffect(() => {
-      const mq = window.matchMedia("(orientation: landscape) and (max-height: 500px)");
-      const handler = e => setIsLandscape(e.matches);
-      if(mq.addEventListener) mq.addEventListener("change", handler);
-      else mq.addListener(handler);
-      return () => {
-        if(mq.removeEventListener) mq.removeEventListener("change", handler);
-        else mq.removeListener(handler);
-      };
-    }, []);
 
     const save = nd => {
       setData(nd); setSyncing(true);
@@ -288,111 +296,70 @@
 
     const exportData = () => {
       const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));
-      const a=document.createElement("a");
-      a.href=url;
+      const a=document.createElement("a"); a.href=url;
       a.download=(data.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()||"voyage")+".json";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      // Revoke after a short delay to let the browser start downloading
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(()=>URL.revokeObjectURL(url),1500);
     };
     const copyJson = async () => {
       const text = JSON.stringify(data,null,2);
       try {
-        if(navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(text);
-          showToast("📋 JSON copié !");
-        } else {
-          // Fallback for older browsers
-          const ta = document.createElement("textarea");
-          ta.value = text;
-          ta.style.position = "fixed";
-          ta.style.opacity = "0";
-          document.body.appendChild(ta);
-          ta.focus(); ta.select();
-          document.execCommand("copy");
-          document.body.removeChild(ta);
-          showToast("📋 JSON copié !");
+        if(navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); showToast("📋 JSON copié !"); }
+        else {
+          const ta = document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+          document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); showToast("📋 JSON copié !");
         }
-      } catch {
-        showToast("❌ Copie impossible");
-      }
+      } catch { showToast("❌ Copie impossible"); }
     };
 
-    /* Push current planning to GitHub gist */
-    const publishToGist = async () => {
-      const id = settings.gistId?.trim();
-      const token = settings.gistToken?.trim();
-      const filename = (settings.gistFilename?.trim() || "voyage.json");
-      if(!id || !token) { showToast("⚠️ Configure ton Gist ID et Token"); return; }
+    const publishToWorker = async () => {
+      const url   = settings.workerUrl?.trim();
+      const token = settings.workerToken?.trim();
+      if(!url) { showToast("⚠️ Configure l'URL du Worker"); return; }
       showToast("⏳ Publication...");
       try {
-        const body = { files: { [filename]: { content: JSON.stringify(data,null,2) } } };
-        const res = await fetch(`https://api.github.com/gists/${encodeURIComponent(id)}`, {
-          method:"PATCH",
-          headers:{
-            "Authorization":`Bearer ${token}`,
-            "Accept":"application/vnd.github+json",
-            "Content-Type":"application/json",
-          },
-          body: JSON.stringify(body),
+        const headers = {"Content-Type":"application/json"};
+        if(token) headers["X-Auth-Token"] = token;
+        const res = await fetch(`${url}/planning`, {
+          method:"PUT", headers, body:JSON.stringify(data),
         });
-        if(res.status===401) { showToast("❌ Token invalide"); return; }
-        if(res.status===404) { showToast("❌ Gist introuvable ou accès refusé"); return; }
-        if(!res.ok) { showToast(`❌ Erreur ${res.status}`); return; }
-        showToast("✅ Gist publié !");
-      } catch {
-        showToast("❌ Connexion impossible");
-      }
+        if(res.status===401||res.status===403){ showToast("❌ Token invalide"); return; }
+        if(!res.ok){ showToast(`❌ Erreur ${res.status}`); return; }
+        showToast("✅ Planning publié !");
+      } catch { showToast("❌ Worker inaccessible"); }
     };
+
+    const showConfirm = (message, onConfirm) => setConfirm({message, onConfirm});
+
     const importData = e => {
       const f=e.target.files[0]; if(!f) return;
       const r=new FileReader();
       r.onload=ev=>{
-        try{const p=JSON.parse(ev.target.result);if(!Array.isArray(p.days)||!Array.isArray(p.cards))throw 0;save(p);showToast("Planning importé ✅");}
-        catch{showToast("Fichier invalide ❌");}
+        try {
+          const p=JSON.parse(ev.target.result);
+          if(!Array.isArray(p.days)||!Array.isArray(p.cards)) throw 0;
+          const hasContent = data.days.some(d=>d.planning||d.notes) || data.cards.length>0;
+          const doImport = () => { save(p); showToast("Planning importé ✅"); };
+          if(hasContent) {
+            showConfirm(`Importer "${p.name||"ce planning"}" écrasera toutes tes données actuelles. Cette action est irréversible.`, doImport);
+          } else { doImport(); }
+        } catch { showToast("Fichier invalide ❌"); }
       };
       r.readAsText(f); e.target.value="";
     };
 
-    /* Convert various share URLs to raw content URLs */
-    const toRawUrl = url => {
-      if(!url) return url;
-      let m;
-      // Google Drive: https://drive.google.com/file/d/ID/view?...
-      m = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
-      if(m) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
-      // Google Drive: https://drive.google.com/open?id=ID
-      m = url.match(/drive\.google\.com\/open\?id=([^&]+)/);
-      if(m) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
-      // GitHub Gist raw with revision hash: https://gist.githubusercontent.com/USER/ID/raw/HASH/FILE
-      // → strip the hash to always point to latest: https://gist.githubusercontent.com/USER/ID/raw/FILE
-      m = url.match(/^(https:\/\/gist\.githubusercontent\.com\/[^/]+\/[a-f0-9]+)\/raw\/[a-f0-9]+\/(.+)$/);
-      if(m) return `${m[1]}/raw/${m[2]}`;
-      // GitHub Gist page URL: https://gist.github.com/user/ID → raw
-      m = url.match(/^https:\/\/gist\.github\.com\/([^/]+)\/([a-f0-9]+)\/?$/);
-      if(m) return `https://gist.githubusercontent.com/${m[1]}/${m[2]}/raw`;
-      // Dropbox: replace dl=0 with dl=1 preserving the separator (? or &)
-      if(url.includes("dropbox.com")) return url.replace(/([?&])dl=0/,"$1dl=1");
-      return url;
-    };
-
     const loadFromUrl = async (url) => {
       if(!url || !url.trim()){ showToast("⚠️ Aucune URL configurée"); return; }
-      const finalUrl = toRawUrl(url.trim());
-      showToast("⏳ Téléchargement...");
+      showToast("⏳ Synchronisation...");
       try {
-        const res = await fetch(finalUrl, { cache:"no-store" });
+        const res = await fetch(url.trim(), { cache:"no-store" });
         if(!res.ok) throw new Error("HTTP "+res.status);
-        const text = await res.text();
-        const p = JSON.parse(text);
-        if(!Array.isArray(p.days) || !Array.isArray(p.cards)) throw new Error("format");
-        save(p);
-        showToast("✅ Planning à jour !");
+        const p = await res.json();
+        if(!Array.isArray(p.days)||!Array.isArray(p.cards)) throw new Error("format");
+        save(p); showToast("✅ Planning synchronisé !");
       } catch(err) {
         if(err.message==="format") showToast("❌ Format du fichier invalide");
-        else showToast("❌ Lien inaccessible (CORS ou URL)");
+        else showToast("❌ URL inaccessible");
       }
     };
 
@@ -413,8 +380,18 @@
       if(form.startDate>form.endDate){showToast("⚠️ La date de retour doit être après le départ.");return;}
       const fresh=buildDays(form.startDate,form.endDate);
       const merged=fresh.map(nd=>data.days.find(d=>d.date===nd.date)||nd);
-      save({...data,name:form.name,startDate:form.startDate,endDate:form.endDate,days:merged});
-      closeModal(); showToast(`✨ ${merged.length} jours générés !`);
+      const preserved=merged.filter(d=>data.days.find(dd=>dd.date===d.date&&(dd.planning||dd.notes)));
+      const doGenerate = () => {
+        save({...data,name:form.name,startDate:form.startDate,endDate:form.endDate,days:merged});
+        closeModal();
+        showToast(`✨ ${merged.length} jours générés${preserved.length>0?` · ${preserved.length} conservé${preserved.length>1?"s":""}`:""} !`);
+      };
+      const removed=data.days.filter(d=>d.planning||d.notes).filter(d=>!fresh.find(nd=>nd.date===d.date));
+      if(removed.length>0) {
+        showConfirm(`${removed.length} jour${removed.length>1?"s":""}  avec du contenu ${removed.length>1?"sont":"est"} hors de la nouvelle plage de dates et sera supprimé${removed.length>1?"s":""}. Continuer ?`, doGenerate);
+      } else {
+        doGenerate();
+      }
     };
 
     const deleteDay  = id => { save({...data,days: data.days.filter(d=>d.id!==id)});  closeModal(); };
@@ -422,12 +399,8 @@
     const moveDay    = (id,dir) => { const a=[...data.days];  const i=a.findIndex(d=>d.id===id); const ni=i+dir; if(ni<0||ni>=a.length)return; [a[i],a[ni]]=[a[ni],a[i]]; save({...data,days:a}); };
     const moveCard   = (id,dir) => { const a=[...data.cards]; const i=a.findIndex(c=>c.id===id); const ni=i+dir; if(ni<0||ni>=a.length)return; [a[i],a[ni]]=[a[ni],a[i]]; save({...data,cards:a}); };
 
-    /* Toggle todo item directly from InfoCard */
     const toggleTodo = (cardId, todoId) => {
-      const cards = data.cards.map(c => {
-        if(c.id!==cardId) return c;
-        return {...c, todos:(c.todos||[]).map(t=>t.id===todoId?{...t,done:!t.done}:t)};
-      });
+      const cards = data.cards.map(c => { if(c.id!==cardId) return c; return {...c, todos:(c.todos||[]).map(t=>t.id===todoId?{...t,done:!t.done}:t)}; });
       save({...data,cards});
     };
 
@@ -436,8 +409,7 @@
 
     const startSwap = id => { setSwapFor(id); setExpanded(null); };
     const doSwap = targetId => {
-      const src=data.days.find(d=>d.id===swapFor);
-      const tgt=data.days.find(d=>d.id===targetId);
+      const src=data.days.find(d=>d.id===swapFor); const tgt=data.days.find(d=>d.id===targetId);
       if(!src || !tgt){ setSwapFor(null); return; }
       const days=data.days.map(d=>{
         if(d.id===swapFor)  return{...d,planning:tgt.planning,notes:tgt.notes};
@@ -448,131 +420,281 @@
     };
 
     const tripLabel = data.startDate&&data.endDate?`${fmtShort(data.startDate)} – ${fmtShort(data.endDate)}`:null;
+
+    // Compteur de jours
+    const dayCounter = (() => {
+      if(!data.startDate || !data.endDate) return null;
+      const today = new Date(); today.setHours(0,0,0,0);
+      const start = new Date(data.startDate+"T12:00:00");
+      const end   = new Date(data.endDate+"T12:00:00");
+      start.setHours(0,0,0,0); end.setHours(0,0,0,0);
+      const diffStart = Math.round((start - today) / 86400000);
+      const diffEnd   = Math.round((end   - today) / 86400000);
+      if(diffStart > 0)  return { label:`Dans ${diffStart} jour${diffStart>1?"s":""}`, color:C.accent2 };
+      if(diffEnd   < 0)  return { label:`Terminé il y a ${Math.abs(diffEnd)} j`, color:C.muted };
+      const dayNum = Math.round((today - start) / 86400000) + 1;
+      const total  = Math.round((end - start) / 86400000) + 1;
+      return { label:`Jour ${dayNum} / ${total}`, color:C.accent };
+    })();
+
+    // Génération HTML statique pour partage
+    const generateShareHtml = () => {
+      const activeDays  = data.days.filter(d=>!d.archived);
+      const activeCards = data.cards.filter(c=>!c.archived);
+      const esc = s => (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+      const renderHtmlBlock = text => {
+        if(!text) return "";
+        return (text||"").split("\n").filter(Boolean).map(line => {
+          if(line.trim()==="---") return `<hr style="border:none;border-top:1px solid #cdc3b4;margin:8px 0">`;
+          const isH = line.startsWith("# ");
+          const isS = line.startsWith("> ");
+          const content = isH?line.slice(2):isS?line.slice(2):line;
+          const escaped = esc(content).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\*(.+?)\*/g,"<em>$1</em>").replace(/__(.+?)__/g,"<u>$1</u>").replace(/\{[romvftbd]:(.+?)\}/g,"$1").replace(/(https?:\/\/[^\s<]+)/g,`<a href="$1" target="_blank" style="color:#2a7fa8">$1</a>`);
+          if(isH) return `<div style="font-family:'Lora',serif;font-weight:600;font-size:15px;color:#c4622a;margin:10px 0 4px">${escaped}</div>`;
+          if(isS) return `<div style="padding-left:12px;border-left:2px solid #cdc3b4;color:#8a7e6e;font-size:13px;margin-bottom:3px">${escaped}</div>`;
+          return `<div style="font-size:13px;margin-bottom:3px;line-height:1.7">${escaped}</div>`;
+        }).join("");
+      };
+
+      const daysHtml = activeDays.map(day => {
+        const badgeHex = day.color?BADGE_COLORS.find(c=>c.id===day.color)?.hex:"#c4622a";
+        const hasPlan  = !!(day.planning||"").trim();
+        const hasNotes = !!(day.notes||"").trim();
+        if(!hasPlan && !hasNotes) return "";
+        return `
+        <div style="border-left:4px solid ${badgeHex};background:#fff;border-radius:8px;padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.07)">
+          <div style="font-family:'Lora',serif;font-size:16px;font-weight:600;color:${badgeHex};margin-bottom:10px;text-transform:capitalize">${esc(fmtLong(day.date))}</div>
+          ${hasPlan?`<div style="margin-bottom:${hasNotes?12:0}px">${renderHtmlBlock(day.planning)}</div>`:""}
+          ${hasNotes?`<div style="background:#f0f7fc;border-radius:6px;padding:10px 12px;border:1px solid #b8d9ed"><div style="font-size:10px;font-weight:700;color:#2a7fa8;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">📌 Infos pratiques</div>${renderHtmlBlock(day.notes)}</div>`:""}
+        </div>`;
+      }).join("");
+
+      const cardsHtml = activeCards.map(card => {
+        const badgeHex = card.color?BADGE_COLORS.find(c=>c.id===card.color)?.hex:"#2a7fa8";
+        const isTodo = card.kind==="todo";
+        const content = isTodo
+          ? (card.todos||[]).map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #e2d9cc"><div style="width:16px;height:16px;border-radius:3px;border:2px solid ${t.done?"#2a7fa8":"#cdc3b4"};background:${t.done?"#2a7fa8":"transparent"};flex-shrink:0;display:flex;align-items:center;justify-content:center">${t.done?`<span style="color:#fff;font-size:9px;font-weight:700">✓</span>`:""}</div><span style="font-size:13px;color:${t.done?"#8a7e6e":"#2c2418"};text-decoration:${t.done?"line-through":"none"}">${esc(t.text)}</span></div>`).join("")
+          : renderHtmlBlock(card.content);
+        return `
+        <div style="border-left:4px solid ${badgeHex};background:#fff;border-radius:8px;padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,0.07)">
+          <div style="font-weight:600;font-size:13px;color:#2c2418;margin-bottom:8px">${isTodo?"☑":"📋"} ${esc(card.title||"Sans titre")}</div>
+          ${content}
+        </div>`;
+      }).join("");
+
+      const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(data.name)}</title><link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Sans',sans-serif;background:#f5f0e8;color:#2c2418;padding:20px;max-width:680px;margin:0 auto}h1{font-family:'Lora',serif;font-size:22px;font-weight:600;margin-bottom:4px}h2{font-family:'Lora',serif;font-size:16px;font-weight:600;color:#c4622a;margin:24px 0 10px;border-bottom:2px solid #e2d9cc;padding-bottom:6px}.meta{font-size:12px;color:#8a7e6e;margin-bottom:20px}.cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:500px){.cards-grid{grid-template-columns:1fr}}.footer{text-align:center;font-size:11px;color:#8a7e6e;margin-top:32px;padding-top:12px;border-top:1px solid #e2d9cc}</style></head><body>
+      <h1>${esc(data.name)}</h1>
+      <div class="meta">${tripLabel?esc(tripLabel)+" · ":""} ${activeDays.length} jours · Généré le ${new Date().toLocaleDateString("fr-FR")}</div>
+      ${daysHtml?`<h2>📅 Programme</h2>${daysHtml}`:""}
+      ${cardsHtml?`<h2>📋 Infos voyage</h2><div class="cards-grid">${cardsHtml}</div>`:""}
+      <div class="footer">Planning Voyage v2.1</div>
+      </body></html>`;
+
+      const blob = new Blob([html], {type:"text/html"});
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = (data.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()||"voyage")+"-partage.html";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url),1500);
+      showToast("📄 Page de partage générée !");
+    };
+
     const safeTop = "max(20px, env(safe-area-inset-top))";
     const safeBot = "max(24px, env(safe-area-inset-bottom))";
 
     return (
       <div style={{fontFamily:C.font,background:C.bg,minHeight:"100svh",color:C.text,maxWidth:"var(--app-max-width)",margin:"0 auto",display:"flex",flexDirection:"column"}}>
 
-        {/* Header */}
-        {isLandscape ? (
-          /* COMPACT landscape header - all on one line */
-          <div style={{paddingTop:`calc(${safeTop} - 4px)`,paddingLeft:16,paddingRight:16,background:C.bg,position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,paddingTop:4,paddingBottom:2}}>
-              <div onClick={()=>openModal("trip")} style={{cursor:"pointer",flexShrink:1,minWidth:0,maxWidth:"35%"}}>
-                <div style={{fontFamily:C.serif,fontSize:15,fontWeight:600,color:C.text,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{data.name}</div>
+        {/* ── HEADER ── */}
+        <div style={{paddingTop:safeTop,background:C.bg,position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}}>
+          {/* Top bar */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px 0"}}>
+            <div onClick={()=>openModal("trip")} style={{cursor:"pointer",flex:1,minWidth:0}}>
+              <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.2}}>{data.name}</div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginTop:1,flexWrap:"wrap"}}>
+                {tripLabel&&<div style={{fontSize:11,color:C.accent,fontWeight:500}}>{tripLabel} · {data.days.filter(d=>!d.archived).length} jours</div>}
+                {dayCounter&&<div style={{fontSize:11,fontWeight:700,color:dayCounter.color,background:`${dayCounter.color}15`,padding:"1px 7px",borderRadius:10,border:`1px solid ${dayCounter.color}30`}}>{dayCounter.label}</div>}
               </div>
-              <div style={{display:"flex",flex:1,justifyContent:"center",gap:16,marginBottom:-1}}>
-                {[["days","📅 Programme"],["cards","📋 Infos"]].map(([id,label])=>(
-                  <button key={id} onClick={()=>setTab(id)} style={{padding:"6px 4px",background:"none",border:"none",cursor:"pointer",color:tab===id?C.accent:C.muted,fontSize:12,fontWeight:tab===id?600:400,borderBottom:tab===id?`2px solid ${C.accent}`:"2px solid transparent"}}>{label}</button>
-                ))}
-              </div>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2,flexShrink:0}}>
-                <div style={{fontSize:9,color:syncing?C.accent:C.muted}}>{syncing?"⟳":"✓"}</div>
-                <button onClick={()=>setShowSettings(true)} style={{padding:"3px 8px",borderRadius:7,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer"}}>⚙️</button>
-              </div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+              <button onClick={()=>{setShowSearch(!showSearch);setSearchQuery("");}} style={{padding:"5px 9px",borderRadius:8,background:showSearch?`${C.accent}15`:C.surface,border:`1px solid ${showSearch?C.accent:C.border2}`,color:showSearch?C.accent:C.muted,fontSize:13,cursor:"pointer"}} title="Rechercher">🔍</button>
+              <button onClick={generateShareHtml} style={{padding:"5px 9px",borderRadius:8,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:13,cursor:"pointer"}} title="Exporter en page partageable">📤</button>
+              <button onClick={()=>saveSettings({...settings,theme:currentTheme==="light"?"dark":"light"})} style={{padding:"5px 9px",borderRadius:8,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:13,cursor:"pointer"}} title="Changer de thème">{currentTheme==="light"?"🌙":"☀️"}</button>
+              <div style={{fontSize:10,color:syncing?C.accent:C.muted,minWidth:16,textAlign:"center"}}>{syncing?"⟳":"✓"}</div>
+              <button onClick={()=>setShowSettings(true)} style={{padding:"5px 9px",borderRadius:8,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:14,cursor:"pointer"}}>⚙️</button>
             </div>
           </div>
-        ) : (
-          /* NORMAL portrait header */
-          <div style={{paddingTop:safeTop,paddingLeft:20,paddingRight:20,background:C.bg,position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}}>
-            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",paddingBottom:12}}>
-              <div onClick={()=>openModal("trip")} style={{cursor:"pointer",flex:1,minWidth:0}}>
-                <div style={{fontFamily:C.serif,fontSize:21,fontWeight:600,color:C.text,lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:10}}>{data.name}</div>
-                {tripLabel&&<div style={{fontSize:12,color:C.accent,marginTop:2,fontWeight:500}}>{tripLabel} · {data.days.length} jours</div>}
-                <div style={{fontSize:11,color:C.muted,marginTop:2}}>Toucher pour modifier</div>
-              </div>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:7,flexShrink:0,paddingTop:2}}>
-                <div style={{fontSize:11,color:syncing?C.accent:C.muted}}>{syncing?"⟳ Sync...":"✓ Sauvegardé"}</div>
-                <button onClick={()=>setShowSettings(true)} style={{padding:"6px 10px",borderRadius:8,background:C.surface,border:`1px solid ${C.border2}`,color:C.muted,fontSize:14,cursor:"pointer"}}>⚙️</button>
-              </div>
+
+          {/* Search bar */}
+          {showSearch&&(
+            <div style={{padding:"8px 16px 0"}}>
+              <input
+                autoFocus
+                type="text"
+                placeholder={tab==="days"?"Rechercher dans le programme...":"Rechercher dans les infos..."}
+                value={searchQuery}
+                onChange={e=>setSearchQuery(e.target.value)}
+                style={{width:"100%",padding:"9px 12px",borderRadius:9,background:C.surface,border:`1.5px solid ${C.accent}`,color:C.text,fontSize:15,outline:"none"}}
+              />
             </div>
-            <div style={{display:"flex",marginBottom:-1}}>
-              {[["days","📅 Programme"],["cards","📋 Infos voyage"]].map(([id,label])=>(
-                <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"10px 0 11px",background:"none",border:"none",cursor:"pointer",color:tab===id?C.accent:C.muted,fontSize:13,fontWeight:tab===id?600:400,borderBottom:tab===id?`2px solid ${C.accent}`:"2px solid transparent"}}>{label}</button>
-              ))}
-            </div>
+          )}
+
+          {/* Tabs */}
+          <div style={{display:"flex",marginTop:8}}>
+            {[["days","📅 Programme"],["cards","📋 Infos voyage"]].map(([id,label])=>(
+              <button key={id} onClick={()=>{setTab(id);setSearchQuery("");}} style={{flex:1,padding:"9px 0 10px",background:"none",border:"none",cursor:"pointer",color:tab===id?C.accent:C.muted,fontSize:13,fontWeight:tab===id?600:400,borderBottom:tab===id?`2px solid ${C.accent}`:"2px solid transparent",transition:"color 0.15s"}}>{label}</button>
+            ))}
           </div>
-        )}
+        </div>
 
         {/* Swap banner */}
         {swapFor&&(
-          <div style={{position:"sticky",top:0,background:C.accent,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,zIndex:15,boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
-            <div style={{fontSize:13,color:C.onAccent,fontWeight:500,flex:1,minWidth:0}}>↔ Échanger avec <strong>{fmtShort(data.days.find(d=>d.id===swapFor)?.date)}</strong><br/><span style={{fontSize:11,opacity:0.85,fontWeight:400}}>Touche un autre jour</span></div>
-            <button onClick={()=>setSwapFor(null)} style={{background:`${C.onAccent}22`,border:`1px solid ${C.onAccent}44`,color:C.onAccent,fontSize:13,fontWeight:600,cursor:"pointer",padding:"8px 14px",borderRadius:8,flexShrink:0}}>Annuler</button>
+          <div style={{position:"sticky",top:0,background:C.accent,padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,zIndex:15,boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
+            <div style={{fontSize:13,color:C.onAccent,fontWeight:500}}>↔ Sélectionne un autre jour à échanger avec <strong>{fmtShort(data.days.find(d=>d.id===swapFor)?.date)}</strong></div>
+            <button onClick={()=>setSwapFor(null)} style={{background:`${C.onAccent}22`,border:`1px solid ${C.onAccent}44`,color:C.onAccent,fontSize:12,fontWeight:600,cursor:"pointer",padding:"6px 12px",borderRadius:8,flexShrink:0}}>Annuler</button>
           </div>
         )}
 
-        {/* Content */}
-        <div style={{flex:1,padding:"14px",paddingBottom:`calc(72px + ${safeBot})`}}>
-          {tab==="days"&&(() => {
-            const activeDays   = data.days.filter(d => !d.archived);
-            const archivedDays = data.days.filter(d =>  d.archived);
-            if(data.days.length===0) return <Empty icon="✈️" text="Aucun jour planifié" sub="Ouvre 'Modifier' et génère les jours depuis les dates du voyage"/>;
+        {/* ── CONTENT ── */}
+        <div style={{flex:1,overflowX:"auto",paddingBottom:`calc(72px + ${safeBot})`}}>
+
+          {/* ── DAYS TAB — TABLE VIEW ── */}
+          {tab==="days"&&(()=>{
+            const q = searchQuery.toLowerCase().trim();
+            const activeDays   = data.days.filter(d=>!d.archived).filter(d=>!q||fmtLong(d.date).toLowerCase().includes(q)||(d.planning||"").toLowerCase().includes(q)||(d.notes||"").toLowerCase().includes(q));
+            const archivedDays = data.days.filter(d=> d.archived);
+            if(data.days.length===0) return (
+              <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}>
+                <div style={{fontSize:34,marginBottom:12}}>✈️</div>
+                <div style={{fontSize:15,marginBottom:6,color:C.text}}>Aucun jour planifié</div>
+                <div style={{fontSize:13}}>Ouvre "Modifier" et génère les jours depuis les dates du voyage</div>
+              </div>
+            );
+            if(activeDays.length===0 && searchQuery) return (
+              <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}>
+                <div style={{fontSize:28,marginBottom:10}}>🔍</div>
+                <div style={{fontSize:14,color:C.text}}>Aucun résultat pour "<strong>{searchQuery}</strong>"</div>
+              </div>
+            );
             return (
-              <>
-                {activeDays.map((day,i)=>(
-                  <DayCard key={day.id} day={day} index={data.days.indexOf(day)} total={data.days.length}
-                    expanded={expandedId===day.id}
-                    swapMode={!!swapFor} isSwapSource={swapFor===day.id}
-                    previewLines={settings.previewLines} fontSize={settings.fontSize}
-                    onToggle={()=>{if(swapFor&&swapFor!==day.id){doSwap(day.id);}else{setExpanded(expandedId===day.id?null:day.id);}}}
-                    onEdit={()=>openModal("day",day)}
-                    onMove={dir=>moveDay(day.id,dir)}
-                    onSwap={()=>startSwap(day.id)}
-                    onArchive={()=>toggleArchiveDay(day.id)}/>
-                ))}
-                {archivedDays.length>0 && (
-                  <div style={{margin:"8px 0"}}>
-                    <button onClick={()=>setShowArchivedDays(!showArchivedDays)} style={{width:"100%",padding:"10px",borderRadius:8,background:"transparent",border:`1px dashed ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer",fontWeight:500}}>📦 {showArchivedDays?"Masquer":"Afficher"} les {archivedDays.length} jour{archivedDays.length>1?"s":""} archivé{archivedDays.length>1?"s":""}</button>
+              <div>
+                <table className="day-table" style={{"--bg":C.bg,"--border":C.border,"--border2":C.border2,"--hover":C.hover,"--surface":C.surface,"--accent":C.accent,"--dim-opacity":C.dimOpacity}}>
+                  <tbody>
+                    {activeDays.map((day,i)=>(
+                      <DayRow key={day.id} day={day} index={data.days.indexOf(day)} total={data.days.length}
+                        expanded={expandedId===day.id}
+                        dimmed={!!expandedId&&expandedId!==day.id}
+                        swapMode={!!swapFor} isSwapSource={swapFor===day.id}
+                        rowIndex={i}
+                        settings={settings}
+                        onToggle={()=>{if(swapFor&&swapFor!==day.id){doSwap(day.id);}else{setExpanded(expandedId===day.id?null:day.id);}}}
+                        onEdit={()=>openModal("day",day)}
+                        onMove={dir=>moveDay(day.id,dir)}
+                        onSwap={()=>startSwap(day.id)}
+                        onArchive={()=>toggleArchiveDay(day.id)}/>
+                    ))}
+                  </tbody>
+                </table>
+
+                {archivedDays.length>0&&(
+                  <div style={{margin:"12px 14px 0"}}>
+                    <button onClick={()=>setShowArchivedDays(!showArchivedDays)} style={{width:"100%",padding:"10px",borderRadius:8,background:"transparent",border:`1px dashed ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer",fontWeight:500}}>
+                      📦 {showArchivedDays?"Masquer":"Afficher"} les {archivedDays.length} jour{archivedDays.length>1?"s":""} archivé{archivedDays.length>1?"s":""}
+                    </button>
                   </div>
                 )}
-                {showArchivedDays && archivedDays.map(day=>(
-                  <DayCard key={day.id} day={day} index={data.days.indexOf(day)} total={data.days.length}
-                    expanded={expandedId===day.id}
-                    swapMode={!!swapFor} isSwapSource={swapFor===day.id}
-                    previewLines={settings.previewLines} fontSize={settings.fontSize}
-                    onToggle={()=>{if(swapFor&&swapFor!==day.id){doSwap(day.id);}else{setExpanded(expandedId===day.id?null:day.id);}}}
-                    onEdit={()=>openModal("day",day)}
-                    onMove={dir=>moveDay(day.id,dir)}
-                    onSwap={()=>startSwap(day.id)}
-                    onArchive={()=>toggleArchiveDay(day.id)}/>
-                ))}
-              </>
+                {showArchivedDays&&archivedDays.length>0&&(
+                  <table className="day-table" style={{marginTop:8,opacity:0.65,"--bg":C.bg,"--border":C.border,"--border2":C.border2,"--hover":C.hover,"--surface":C.surface,"--accent":C.accent}}>
+                    <tbody>
+                      {archivedDays.map((day,i)=>(
+                        <DayRow key={day.id} day={day} index={data.days.indexOf(day)} total={data.days.length}
+                          expanded={expandedId===day.id} swapMode={!!swapFor} isSwapSource={swapFor===day.id} rowIndex={i} settings={settings}
+                          onToggle={()=>setExpanded(expandedId===day.id?null:day.id)}
+                          onEdit={()=>openModal("day",day)} onMove={dir=>moveDay(day.id,dir)} onSwap={()=>startSwap(day.id)} onArchive={()=>toggleArchiveDay(day.id)}/>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             );
           })()}
-          {tab==="cards"&&(() => {
-            const activeCards   = data.cards.filter(c => !c.archived);
-            const archivedCards = data.cards.filter(c =>  c.archived);
-            if(data.cards.length===0) return <Empty icon="📋" text="Aucune info ajoutée" sub="Appuie sur + pour ajouter une info ou une liste TODO"/>;
+
+          {/* ── CARDS TAB — table view (same as days) ── */}
+          {tab==="cards"&&(()=>{
+            const q = searchQuery.toLowerCase().trim();
+            const activeCards   = data.cards.filter(c=>!c.archived).filter(c=>!q||(c.title||"").toLowerCase().includes(q)||(c.content||"").toLowerCase().includes(q)||(c.todos||[]).some(t=>t.text.toLowerCase().includes(q)));
+            const archivedCards = data.cards.filter(c=> c.archived);
+            if(data.cards.length===0) return (
+              <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}>
+                <div style={{fontSize:34,marginBottom:12}}>📋</div>
+                <div style={{fontSize:15,marginBottom:6,color:C.text}}>Aucune info ajoutée</div>
+                <div style={{fontSize:13}}>Appuie sur + pour ajouter une info ou une liste TODO</div>
+              </div>
+            );
+            if(activeCards.length===0 && searchQuery) return (
+              <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}>
+                <div style={{fontSize:28,marginBottom:10}}>🔍</div>
+                <div style={{fontSize:14,color:C.text}}>Aucun résultat pour "<strong>{searchQuery}</strong>"</div>
+              </div>
+            );
             return (
-              <>
-                {activeCards.map(card=>(
-                  <InfoCard key={card.id} card={card} index={data.cards.indexOf(card)} total={data.cards.length}
-                    onEdit={()=>openModal("card",card)}
-                    onMove={dir=>moveCard(card.id,dir)}
-                    onToggleTodo={(todoId)=>toggleTodo(card.id,todoId)}
-                    onArchive={()=>toggleArchiveCard(card.id)}/>
-                ))}
-                {archivedCards.length>0 && (
-                  <div style={{margin:"8px 0"}}>
-                    <button onClick={()=>setShowArchivedCards(!showArchivedCards)} style={{width:"100%",padding:"10px",borderRadius:8,background:"transparent",border:`1px dashed ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer",fontWeight:500}}>📦 {showArchivedCards?"Masquer":"Afficher"} les {archivedCards.length} info{archivedCards.length>1?"s":""} archivée{archivedCards.length>1?"s":""}</button>
+              <div>
+                <table className="day-table" style={{"--bg":C.bg,"--border":C.border,"--border2":C.border2,"--hover":C.hover,"--surface":C.surface,"--accent":C.accent2,"--dim-opacity":C.dimOpacity}}>
+                  <tbody>
+                    {activeCards.map((card,i)=>(
+                      <InfoCard key={card.id} card={card} index={data.cards.indexOf(card)} total={data.cards.length}
+                        rowIndex={i}
+                        open={expandedCardId===card.id}
+                        onToggle={()=>setExpandedCard(expandedCardId===card.id?null:card.id)}
+                        dimmed={!!expandedCardId&&expandedCardId!==card.id}
+                        onEdit={()=>openModal("card",card)}
+                        onMove={dir=>moveCard(card.id,dir)}
+                        onToggleTodo={(todoId)=>toggleTodo(card.id,todoId)}
+                        onArchive={()=>toggleArchiveCard(card.id)}/>
+                    ))}
+                  </tbody>
+                </table>
+                {archivedCards.length>0&&(
+                  <div style={{margin:"12px 14px 0"}}>
+                    <button onClick={()=>setShowArchivedCards(!showArchivedCards)} style={{width:"100%",padding:"10px",borderRadius:8,background:"transparent",border:`1px dashed ${C.border2}`,color:C.muted,fontSize:12,cursor:"pointer",fontWeight:500}}>
+                      📦 {showArchivedCards?"Masquer":"Afficher"} les {archivedCards.length} info{archivedCards.length>1?"s":""} archivée{archivedCards.length>1?"s":""}
+                    </button>
                   </div>
                 )}
-                {showArchivedCards && archivedCards.map(card=>(
-                  <InfoCard key={card.id} card={card} index={data.cards.indexOf(card)} total={data.cards.length}
-                    onEdit={()=>openModal("card",card)}
-                    onMove={dir=>moveCard(card.id,dir)}
-                    onToggleTodo={(todoId)=>toggleTodo(card.id,todoId)}
-                    onArchive={()=>toggleArchiveCard(card.id)}/>
-                ))}
-              </>
+                {showArchivedCards&&archivedCards.length>0&&(
+                  <table className="day-table" style={{marginTop:8,opacity:0.65}}>
+                    <tbody>
+                      {archivedCards.map((card,i)=>(
+                        <InfoCard key={card.id} card={card} index={data.cards.indexOf(card)} total={data.cards.length}
+                          rowIndex={i}
+                          onEdit={()=>openModal("card",card)} onMove={dir=>moveCard(card.id,dir)}
+                          onToggleTodo={(todoId)=>toggleTodo(card.id,todoId)} onArchive={()=>toggleArchiveCard(card.id)}/>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             );
           })()}
         </div>
 
-        {/* Version */}
-        <div style={{textAlign:"center",padding:"8px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v1.11.1</div>
+        <div style={{textAlign:"center",padding:"6px 0 0",fontSize:10,color:`${C.muted}88`,letterSpacing:0.5}}>v3.0</div>
+
+        {/* Confirm dialog */}
+        {confirm&&(
+          <div onClick={()=>setConfirm(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:C.surface,borderRadius:16,padding:"24px 20px",maxWidth:340,width:"100%",border:`1px solid ${C.border2}`,boxShadow:"0 8px 32px rgba(0,0,0,0.2)"}}>
+              <div style={{fontSize:22,textAlign:"center",marginBottom:12}}>⚠️</div>
+              <div style={{fontSize:14,color:C.text,lineHeight:1.6,marginBottom:20,textAlign:"center"}}>{confirm.message}</div>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>setConfirm(null)} style={{flex:1,padding:"12px",borderRadius:10,background:C.surface2,border:`1px solid ${C.border2}`,color:C.muted,fontSize:14,cursor:"pointer",fontWeight:500}}>Annuler</button>
+                <button onClick={()=>{confirm.onConfirm();setConfirm(null);}} style={{flex:1,padding:"12px",borderRadius:10,background:C.danger,border:"none",color:"#fff",fontSize:14,cursor:"pointer",fontWeight:600}}>Confirmer</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* FAB */}
         <button onClick={()=>openModal(tab==="days"?"day":"card")} style={{position:"fixed",bottom:`calc(16px + ${safeBot})`,right:"max(16px, calc(50vw - var(--app-max-width) / 2 + 16px))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",fontSize:26,color:C.onAccent,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${C.accent}66`,zIndex:20}}>+</button>
@@ -581,7 +703,7 @@
         {toast&&<div style={{position:"fixed",top:`calc(12px + ${safeTop})`,left:"50%",transform:"translateX(-50%)",background:currentTheme==="dark"?"#2c2c2e":"#2c2418",borderRadius:10,padding:"10px 18px",fontSize:13,color:"#fff",zIndex:100,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.3)",border:`1px solid ${C.border}`}}>{toast}</div>}
 
         {/* Settings */}
-        {showSettings&&<SettingsPanel settings={settings} onChange={saveSettings} onClose={()=>setShowSettings(false)} safeBot={safeBot} exportData={exportData} importData={importData} loadFromUrl={loadFromUrl} copyJson={copyJson} publishToGist={publishToGist}/>}
+        {showSettings&&<SettingsPanel settings={settings} onChange={saveSettings} onClose={()=>setShowSettings(false)} safeBot={safeBot} exportData={exportData} importData={importData} loadFromUrl={loadFromUrl} copyJson={copyJson} publishToWorker={publishToWorker}/>}
 
         {/* Modal */}
         {modal&&<EditModal modal={modal} form={form} setForm={setForm} onClose={closeModal}
@@ -591,178 +713,240 @@
     );
   }
 
-  /* ════════ EMPTY ════════ */
-  function Empty({icon,text,sub}) {
-    return (
-      <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}>
-        <div style={{fontSize:34,marginBottom:12}}>{icon}</div>
-        <div style={{fontSize:15,marginBottom:6,color:C.text}}>{text}</div>
-        <div style={{fontSize:13}}>{sub}</div>
-      </div>
-    );
-  }
-
-  /* ════════ DAY CARD ════════ */
-  function DayCard({day,index,total,expanded,swapMode,isSwapSource,previewLines,fontSize,onToggle,onEdit,onMove,onSwap,onArchive}) {
+  /* ════════ DAY ROW (table row) ════════ */
+  function DayRow({day,index,total,expanded,dimmed,swapMode,isSwapSource,rowIndex,settings,onToggle,onEdit,onMove,onSwap,onArchive}) {
     const isArchived = !!day.archived;
-    const allLines  = (day.planning||"").split("\n").filter(Boolean);
-    const hasPlan   = allLines.length>0;
-    const hasNotes  = !!day.notes?.trim();
+    const hasPlan   = !!(day.planning||"").trim();
+    const hasNotes  = !!(day.notes||"").trim();
     const swapTarget= swapMode&&!isSwapSource;
-    const previewContent = allLines.slice(0,previewLines).join("\n");
 
     const badgeHex  = day.color?BADGE_COLORS.find(c=>c.id===day.color)?.hex:null;
-    const badgeBg   = badgeHex||C.surface2;
-    const numColor  = badgeHex?"#ffffff":(isSwapSource?C.accent:swapTarget?C.accent2:C.accent);
-    const mutedClr  = badgeHex?"rgba(255,255,255,0.75)":C.muted;
+    const allLines  = (day.planning||"").split("\n").filter(Boolean);
+    const previewContent = allLines.slice(0, settings.previewLines).join("\n");
 
-    /* Swap highlighting */
-    const cardBg    = isSwapSource ? `${C.accent}15` : C.surface;
-    const cardBorder= isSwapSource ? C.accent : swapTarget ? C.accent2 : C.border;
-    const borderW   = isSwapSource ? 7 : swapTarget ? 2 : 1;
-    const borderLeft= isSwapSource ? `7px solid ${C.accent}` : swapTarget ? `2px solid ${C.accent2}` : "3px solid transparent";
+    // Row coloring
+    const rowBg = isSwapSource
+      ? `${C.accent}18`
+      : swapTarget
+        ? `${C.accent2}0c`
+        : rowIndex%2===0 ? C.surface : C.rowAlt;
+
+    const borderLeft = badgeHex
+      ? `4px solid ${badgeHex}`
+      : isSwapSource
+        ? `4px solid ${C.accent}`
+        : `4px solid transparent`;
+
+    const dayShort = fmtDay(day.date); // "lun.", "mar."...
+    const dayNum   = fmtNum(day.date);
+    const dayMon   = fmtMon(day.date);
 
     return (
-      <div style={{marginBottom:12,borderRadius:12,background:cardBg,border:`${borderW}px solid ${cardBorder}`,borderLeft,overflow:"hidden",transition:"all 0.15s",boxShadow: isSwapSource?`0 4px 16px ${C.accent}40`:"0 2px 8px rgba(0,0,0,0.07)",opacity:isArchived?0.55:1,filter:isArchived?"grayscale(0.5)":"none"}}>
-        <div onClick={onToggle} style={{display:"flex",alignItems:"stretch",cursor:"pointer"}}>
-          {/* Badge date */}
-          <div style={{width:52,flexShrink:0,background:badgeBg,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"12px 0",gap:1}}>
-            <div style={{fontSize:9,fontWeight:700,color:mutedClr,letterSpacing:0.8,textTransform:"uppercase"}}>{fmtInit(day.date)}</div>
-            <div style={{fontFamily:C.serif,fontWeight:600,color:numColor,fontSize:26,lineHeight:1.05}}>{fmtNum(day.date)}</div>
-            <div style={{fontSize:9,color:mutedClr,textTransform:"lowercase"}}>{fmtMon(day.date)}</div>
-          </div>
-          {/* Preview */}
-          <div style={{flex:1,minWidth:0,padding:"12px 12px 12px 14px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
-            {isArchived
-              ?<div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:10,fontWeight:700,color:C.muted,background:`${C.muted}22`,padding:"2px 8px",borderRadius:10,letterSpacing:0.5,textTransform:"uppercase"}}>📦 Archivé</span>
-                <span style={{fontSize:12,color:C.muted,textTransform:"capitalize",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fmtLong(day.date)}</span>
-               </div>
-              :!expanded&&hasPlan
-              ?<div>{renderBlock(previewContent,fontSize,false)}</div>
-              :!expanded&&<div style={{fontSize:fontSize-1,color:C.muted,fontStyle:"italic"}}>Journée vide</div>
-            }
-            {expanded&&!isArchived&&<div style={{fontSize:12,color:C.muted,textTransform:"capitalize"}}>{fmtLong(day.date)}</div>}
-          </div>
-          {/* Dots + chevron */}
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,padding:"0 12px",flexShrink:0}}>
-            <div style={{display:"flex",gap:4}}>
-              {!isArchived&&hasPlan &&<div style={{width:5,height:5,borderRadius:"50%",background:C.accent}}/>}
-              {!isArchived&&hasNotes&&<div style={{width:5,height:5,borderRadius:"50%",background:C.accent2}}/>}
+      <>
+        {/* Main row */}
+        <tr className={`day-row${expanded?" expanded":""}${dimmed?" dimmed":""}`}
+          onClick={onToggle}
+          style={{background:rowBg,cursor:"pointer",transition:"background 0.1s,opacity 0.2s",opacity:isArchived&&!expanded?0.55:1,"--row-color":badgeHex||C.accent}}>
+
+          {/* Date cell */}
+          <td style={{width:52,borderLeft,padding:"10px 0",textAlign:"center",verticalAlign:"middle",userSelect:"none"}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
+              <div style={{fontSize:9,fontWeight:700,color:badgeHex||C.muted,letterSpacing:0.5,textTransform:"uppercase",lineHeight:1}}>{dayShort}</div>
+              <div style={{fontFamily:C.serif,fontWeight:600,fontSize:22,lineHeight:1.1,color:badgeHex||C.accent}}>{dayNum}</div>
+              <div style={{fontSize:9,color:badgeHex||C.muted,lineHeight:1}}>{dayMon}</div>
             </div>
-            <div style={{color:C.muted,fontSize:10}}>{expanded?"▲":"▼"}</div>
-          </div>
-        </div>
+          </td>
 
-        {isSwapSource&&<div style={{padding:"8px 14px 10px 14px",fontSize:12,color:C.accent,fontWeight:600,display:"flex",alignItems:"center",gap:6}}><span style={{background:C.accent,color:C.onAccent,padding:"2px 8px",borderRadius:10,fontSize:10,letterSpacing:0.5}}>SOURCE</span> Jour sélectionné pour l'échange</div>}
-        {swapTarget&&<div style={{padding:"0 14px 10px 66px",fontSize:12,color:C.accent2,fontStyle:"italic"}}>Toucher pour échanger le contenu</div>}
-
-        {expanded&&!swapMode&&(
-          <div style={{borderTop:`1px solid ${C.border}`,padding:"14px 16px",background:`${C.accent}0a`}}>
-            {hasPlan
-              ?<div style={{marginBottom:14}}>
-                <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:C.accent,marginBottom:10,fontWeight:600}}>Programme</div>
-                {renderBlock(day.planning,fontSize,false)}
-               </div>
-              :<div style={{fontSize:13,color:C.muted,fontStyle:"italic",marginBottom:14}}>Aucun programme saisi</div>
-            }
-            {hasNotes&&(
-              <div style={{marginBottom:14,padding:"12px 14px",background:`${C.accent2}0c`,borderRadius:10,border:`1px solid ${C.accent2}28`}}>
-                <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:C.accent2,marginBottom:10,fontWeight:600}}>Infos pratiques</div>
-                {renderBlock(day.notes,fontSize,true)}
-              </div>
+          {/* Content preview cell */}
+          <td style={{padding:"10px 10px 10px 8px",minWidth:0,verticalAlign:"middle"}}>
+            {isArchived?(
+              <span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>📦 Archivé — {fmtShort(day.date)}</span>
+            ):swapTarget?(
+              <span style={{fontSize:12,color:C.accent2,fontStyle:"italic"}}>Toucher pour échanger le contenu</span>
+            ):isSwapSource?(
+              <span style={{fontSize:12,color:C.accent,fontWeight:600}}>↔ Jour sélectionné pour l'échange</span>
+            ):!expanded&&hasPlan?(
+              <div style={{overflow:"hidden"}}>{renderBlock(previewContent, settings.fontSize, false)}</div>
+            ):!expanded?(
+              <span style={{fontSize:settings.fontSize-1,color:C.muted,fontStyle:"italic"}}>Journée vide — toucher pour remplir</span>
+            ):(
+              <div style={{fontSize:11,color:C.muted,textTransform:"capitalize"}}>{fmtLong(day.date)}</div>
             )}
-            <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}}>
-              <button onClick={onEdit}     style={{flex:"1 1 auto",minWidth:90,padding:"9px 0",borderRadius:9,background:`${C.accent}12`,border:`1px solid ${C.accent}30`,color:C.accent,fontSize:13,cursor:"pointer",fontWeight:500}}>✏️ Modifier</button>
-              <button onClick={onSwap}     style={{flex:"1 1 auto",minWidth:90,padding:"9px 0",borderRadius:9,background:`${C.accent2}12`,border:`1px solid ${C.accent2}30`,color:C.accent2,fontSize:13,cursor:"pointer",fontWeight:500}}>↔ Échanger</button>
-              <button onClick={onArchive}  style={{flex:"1 1 auto",minWidth:90,padding:"9px 0",borderRadius:9,background:`${C.muted}12`,border:`1px solid ${C.muted}30`,color:C.muted,fontSize:13,cursor:"pointer",fontWeight:500}}>{isArchived?"↩ Désarchiver":"📦 Archiver"}</button>
-              <button onClick={()=>onMove(-1)} disabled={index===0}       style={{width:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,color:index===0?C.border:C.muted,fontSize:14,cursor:index===0?"default":"pointer"}}>↑</button>
-              <button onClick={()=>onMove(1)}  disabled={index===total-1} style={{width:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,color:index===total-1?C.border:C.muted,fontSize:14,cursor:index===total-1?"default":"pointer"}}>↓</button>
+          </td>
+
+          {/* Indicators + chevron */}
+          <td style={{width:36,padding:"10px 6px",textAlign:"center",verticalAlign:"middle"}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+              <div style={{display:"flex",gap:3,justifyContent:"center"}}>
+                {hasPlan &&!isArchived&&<div style={{width:4,height:4,borderRadius:"50%",background:C.accent}}/>}
+                {hasNotes&&!isArchived&&<div style={{width:4,height:4,borderRadius:"50%",background:C.accent2}}/>}
+              </div>
+              <div style={{color:C.muted,fontSize:9}}>{expanded?"▲":"▼"}</div>
             </div>
-          </div>
+          </td>
+        </tr>
+
+        {/* Expanded detail row */}
+        {expanded&&!swapMode&&(
+          <>
+          <tr className="day-detail" style={{"--row-color":badgeHex||C.accent}}>
+            <td colSpan={3} style={{padding:0}}>
+              <div style={{background:C.detailBg,borderLeft,padding:"14px 16px 14px 14px"}}>
+
+                {/* Planning section */}
+                {hasPlan?(
+                  <div style={{marginBottom:hasNotes?14:0}}>
+                    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:C.accent,marginBottom:8,fontWeight:700}}>📅 Programme</div>
+                    {renderBlock(day.planning, settings.fontSize, false)}
+                  </div>
+                ):(
+                  <div style={{fontSize:13,color:C.muted,fontStyle:"italic",marginBottom:hasNotes?14:0}}>Aucun programme saisi</div>
+                )}
+
+                {/* Notes section */}
+                {hasNotes&&(
+                  <div style={{padding:"10px 12px",background:`${C.accent2}0c`,borderRadius:10,border:`1px solid ${C.accent2}28`,marginBottom:12}}>
+                    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:C.accent2,marginBottom:8,fontWeight:700}}>📌 Infos pratiques</div>
+                    {renderBlock(day.notes, settings.fontSize, true)}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:hasPlan||hasNotes?8:0}}>
+                  <button onClick={e=>{e.stopPropagation();onEdit();}} style={{flex:"1 1 auto",minWidth:80,padding:"8px 0",borderRadius:8,background:`${C.accent}12`,border:`1px solid ${C.accent}30`,color:C.accent,fontSize:12,cursor:"pointer",fontWeight:600}}>✏️ Modifier</button>
+                  <button onClick={e=>{e.stopPropagation();onSwap();}} style={{flex:"1 1 auto",minWidth:80,padding:"8px 0",borderRadius:8,background:`${C.accent2}12`,border:`1px solid ${C.accent2}30`,color:C.accent2,fontSize:12,cursor:"pointer",fontWeight:600}}>↔ Échanger</button>
+                  <button onClick={e=>{e.stopPropagation();onArchive();}} style={{flex:"1 1 auto",minWidth:80,padding:"8px 0",borderRadius:8,background:`${C.muted}12`,border:`1px solid ${C.muted}30`,color:C.muted,fontSize:12,cursor:"pointer",fontWeight:600}}>{isArchived?"↩ Désarchiver":"📦 Archiver"}</button>
+                  <button onClick={e=>{e.stopPropagation();onMove(-1);}} disabled={index===0} style={{width:34,padding:"8px 0",borderRadius:8,background:C.surface,border:`1px solid ${C.border}`,color:index===0?C.border:C.muted,fontSize:13,cursor:index===0?"default":"pointer"}}>↑</button>
+                  <button onClick={e=>{e.stopPropagation();onMove(1);}} disabled={index===total-1} style={{width:34,padding:"8px 0",borderRadius:8,background:C.surface,border:`1px solid ${C.border}`,color:index===total-1?C.border:C.muted,fontSize:13,cursor:index===total-1?"default":"pointer"}}>↓</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {/* Spacer row — visible bottom edge of the "lifted card" */}
+          <tr><td colSpan={3} style={{padding:0,height:6,background:C.bg,borderBottom:`2px solid ${C.border2}`}}/></tr>
+          </>
         )}
-      </div>
+      </>
     );
   }
 
-  /* ════════ INFO CARD ════════ */
-  function InfoCard({card,index,total,onEdit,onMove,onToggleTodo,onArchive}) {
-    const [open,setOpen] = useState(false);
+  /* ════════ INFO CARD (table row, same style as DayRow) ════════ */
+  function InfoCard({card,index,total,rowIndex,open,onToggle,dimmed,onEdit,onMove,onToggleTodo,onArchive}) {
     const isArchived = !!card.archived;
     const isTodo = card.kind==="todo";
     const badgeHex = card.color?BADGE_COLORS.find(c=>c.id===card.color)?.hex:null;
-    const iconBg   = badgeHex?badgeHex:`${C.accent2}12`;
-    const iconBorder = badgeHex?"none":`1px solid ${C.accent2}28`;
-    const iconColor  = badgeHex?"#fff":C.accent2;
 
     const todosList  = isTodo?(card.todos||[]):[];
     const doneCount  = todosList.filter(t=>t.done).length;
     const totalCount = todosList.length;
+    const progress   = totalCount>0?doneCount/totalCount:0;
 
     const preview = isTodo
       ? (totalCount===0 ? "Liste vide" : `${doneCount}/${totalCount} fait${doneCount>1?"s":""}`)
       : stripMd((card.content||"").split("\n").filter(Boolean)[0]||"");
 
-    return (
-      <div style={{marginBottom:12,borderRadius:12,background:C.surface,border:`1px solid ${C.border}`,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)",opacity:isArchived?0.55:1,filter:isArchived?"grayscale(0.5)":"none"}}>
-        <div onClick={()=>setOpen(!open)} style={{padding:"13px 14px",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
-          <div style={{width:36,height:36,borderRadius:9,flexShrink:0,background:iconBg,border:iconBorder,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,color:iconColor}}>
-            {isTodo?"☑":"📋"}
-          </div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:500,fontSize:14,color:C.text,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              {card.title||"Sans titre"}
-              {isArchived&&<span style={{fontSize:10,fontWeight:700,color:C.muted,background:`${C.muted}22`,padding:"2px 8px",borderRadius:10,letterSpacing:0.5,textTransform:"uppercase"}}>📦 Archivé</span>}
-              {!isArchived&&isTodo&&totalCount>0&&(
-                <span style={{fontSize:11,color:doneCount===totalCount?C.accent2:C.muted,fontWeight:400}}>{doneCount}/{totalCount}</span>
-              )}
-            </div>
-            {!open&&!isArchived&&preview&&<div style={{fontSize:12,color:C.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview}</div>}
-          </div>
-          <div style={{color:C.muted,fontSize:10}}>{open?"▲":"▼"}</div>
-        </div>
+    const rowBg = rowIndex%2===0 ? C.surface : C.rowAlt;
+    const borderLeft = badgeHex ? `4px solid ${badgeHex}` : `4px solid transparent`;
+    const iconColor = badgeHex?"#fff":C.accent2;
+    const iconBg    = badgeHex?badgeHex:`${C.accent2}15`;
 
-        {open&&(
-          <div style={{borderTop:`1px solid ${C.border}`,padding:"14px 16px",background:`${C.accent2}0a`}}>
-            {isTodo?(
-              <div style={{marginBottom:14}}>
-                {todosList.map(todo=>(
-                  <div key={todo.id} onClick={()=>onToggleTodo(todo.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
-                    <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${todo.done?C.accent2:C.border2}`,background:todo.done?C.accent2:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
-                      {todo.done&&<span style={{color:C.onAccent,fontSize:12,fontWeight:700}}>✓</span>}
-                    </div>
-                    <div style={{fontSize:14,color:todo.done?C.muted:C.text,textDecoration:todo.done?"line-through":"none",lineHeight:1.5,flex:1}}>
-                      {renderInline(todo.text,todo.done?C.muted:C.text)}
-                    </div>
-                  </div>
-                ))}
-                {totalCount===0&&<div style={{fontSize:13,color:C.muted,fontStyle:"italic"}}>Aucun item — modifie pour en ajouter</div>}
-              </div>
-            ):(
-              <div style={{marginBottom:14}}>{renderBlock(card.content,14,true)}</div>
-            )}
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <button onClick={onEdit}    style={{flex:"1 1 auto",minWidth:90,padding:"9px 0",borderRadius:9,background:`${C.accent2}12`,border:`1px solid ${C.accent2}30`,color:C.accent2,fontSize:13,cursor:"pointer",fontWeight:500}}>✏️ Modifier</button>
-              <button onClick={onArchive} style={{flex:"1 1 auto",minWidth:90,padding:"9px 0",borderRadius:9,background:`${C.muted}12`,border:`1px solid ${C.muted}30`,color:C.muted,fontSize:13,cursor:"pointer",fontWeight:500}}>{isArchived?"↩ Désarchiver":"📦 Archiver"}</button>
-              <button onClick={()=>onMove(-1)} disabled={index===0}       style={{width:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,color:index===0?C.border:C.muted,fontSize:14,cursor:index===0?"default":"pointer"}}>↑</button>
-              <button onClick={()=>onMove(1)}  disabled={index===total-1} style={{width:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,color:index===total-1?C.border:C.muted,fontSize:14,cursor:index===total-1?"default":"pointer"}}>↓</button>
+    return (
+      <>
+        <tr className={`day-row${open?" expanded":""}${dimmed?" dimmed":""}`}
+          onClick={onToggle}
+          style={{background:rowBg,cursor:"pointer",transition:"background 0.1s,opacity 0.2s",opacity:isArchived&&!open?0.55:1,"--row-color":badgeHex||C.accent2}}>
+
+          {/* Icon cell (mirrors date cell) */}
+          <td style={{width:52,borderLeft,padding:"10px 0",textAlign:"center",verticalAlign:"middle",userSelect:"none"}}>
+            <div style={{width:32,height:32,borderRadius:8,background:iconBg,border:badgeHex?"none":`1px solid ${C.accent2}28`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,color:iconColor,margin:"0 auto"}}>
+              {isTodo?"☑":"📋"}
             </div>
-          </div>
+          </td>
+
+          {/* Title + preview cell */}
+          <td style={{padding:"10px 10px 10px 8px",minWidth:0,verticalAlign:"middle"}}>
+            {isArchived?(
+              <span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>📦 Archivé — {card.title||"Sans titre"}</span>
+            ):(
+              <>
+                <div style={{fontWeight:600,fontSize:13,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{card.title||"Sans titre"}</div>
+                {!open&&(
+                  <>
+                    <div style={{fontSize:11,color:C.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview}</div>
+                    {isTodo&&totalCount>0&&(
+                      <div style={{marginTop:5,height:3,borderRadius:2,background:C.border,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${progress*100}%`,background:doneCount===totalCount?C.accent2:C.accent,borderRadius:2,transition:"width 0.3s"}}/>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </td>
+
+          {/* Chevron cell */}
+          <td style={{width:36,padding:"10px 6px",textAlign:"center",verticalAlign:"middle"}}>
+            <div style={{color:C.muted,fontSize:9}}>{open?"▲":"▼"}</div>
+          </td>
+        </tr>
+
+        {/* Expanded detail row */}
+        {open&&(
+          <>
+          <tr className="day-detail" style={{"--row-color":badgeHex||C.accent2}}>
+            <td colSpan={3} style={{padding:0}}>
+              <div style={{background:C.detailBg,borderLeft,padding:"14px 16px 14px 14px"}}>
+                {isTodo?(
+                  <div style={{marginBottom:12}}>
+                    {todosList.map(todo=>(
+                      <div key={todo.id} onClick={e=>{e.stopPropagation();onToggleTodo(todo.id);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
+                        <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${todo.done?C.accent2:C.border2}`,background:todo.done?C.accent2:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+                          {todo.done&&<span style={{color:C.onAccent,fontSize:12,fontWeight:700}}>✓</span>}
+                        </div>
+                        <div style={{fontSize:14,color:todo.done?C.muted:C.text,textDecoration:todo.done?"line-through":"none",lineHeight:1.5,flex:1}}>{renderInline(todo.text,todo.done?C.muted:C.text)}</div>
+                      </div>
+                    ))}
+                    {totalCount===0&&<div style={{fontSize:13,color:C.muted,fontStyle:"italic"}}>Aucun item — modifie pour en ajouter</div>}
+                    {totalCount>0&&(
+                      <div style={{marginTop:8,height:4,borderRadius:2,background:C.border,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${progress*100}%`,background:doneCount===totalCount?C.accent2:C.accent,borderRadius:2,transition:"width 0.3s"}}/>
+                      </div>
+                    )}
+                  </div>
+                ):(
+                  <div style={{marginBottom:12}}>{renderBlock(card.content,14,true)}</div>
+                )}
+                <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                  <button onClick={e=>{e.stopPropagation();onEdit();}} style={{flex:"1 1 auto",minWidth:80,padding:"8px 0",borderRadius:8,background:`${C.accent2}12`,border:`1px solid ${C.accent2}30`,color:C.accent2,fontSize:12,cursor:"pointer",fontWeight:600}}>✏️ Modifier</button>
+                  <button onClick={e=>{e.stopPropagation();onArchive();}} style={{flex:"1 1 auto",minWidth:80,padding:"8px 0",borderRadius:8,background:`${C.muted}12`,border:`1px solid ${C.muted}30`,color:C.muted,fontSize:12,cursor:"pointer",fontWeight:600}}>{isArchived?"↩ Désarchiver":"📦 Archiver"}</button>
+                  <button onClick={e=>{e.stopPropagation();onMove(-1);}} disabled={index===0} style={{width:34,padding:"8px 0",borderRadius:8,background:C.surface,border:`1px solid ${C.border}`,color:index===0?C.border:C.muted,fontSize:13,cursor:index===0?"default":"pointer"}}>↑</button>
+                  <button onClick={e=>{e.stopPropagation();onMove(1);}} disabled={index===total-1} style={{width:34,padding:"8px 0",borderRadius:8,background:C.surface,border:`1px solid ${C.border}`,color:index===total-1?C.border:C.muted,fontSize:13,cursor:index===total-1?"default":"pointer"}}>↓</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {/* Spacer row — bottom edge of the "lifted card" */}
+          <tr><td colSpan={3} style={{padding:0,height:6,background:C.bg,borderBottom:`2px solid ${C.border2}`}}/></tr>
+          </>
         )}
-      </div>
+      </>
     );
   }
 
   /* ════════ SETTINGS PANEL ════════ */
-  function SettingsPanel({settings,onChange,onClose,safeBot,exportData,importData,loadFromUrl,copyJson,publishToGist}) {
-    const [showHelp, setShowHelp] = useState(false);
-    const [showLocalHelp, setShowLocalHelp] = useState(false);
-    const [showToken, setShowToken] = useState(false);
+  function SettingsPanel({settings,onChange,onClose,safeBot,exportData,importData,loadFromUrl,copyJson,publishToWorker}) {
+    const [showWorkerHelp, setShowWorkerHelp] = useState(false);
+    const [showLocalHelp,  setShowLocalHelp]  = useState(false);
+    const [showToken,      setShowToken]      = useState(false);
     const lbl={fontSize:13,color:C.text,fontWeight:500};
     const val={fontSize:13,color:C.accent,fontWeight:600,minWidth:28,textAlign:"right"};
     const inp={width:"100%",padding:"10px 12px",borderRadius:9,background:C.surface2,border:`1px solid ${C.border2}`,color:C.text,fontSize:16,outline:"none",minWidth:0};
     const section={padding:"14px",borderRadius:11,background:C.surface2,border:`1.5px solid ${C.border2}`,marginBottom:14};
     const sectionTitle={fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:1,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between"};
+    const iBtn={background:"none",border:`1px solid ${C.accent}55`,borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:700,padding:0};
+    const workerReady = !!settings.workerUrl?.trim();
+    const syncReady   = !!settings.remoteUrl?.trim();
+
     return (
       <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",zIndex:50,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
         <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"90svh",overflowY:"auto",touchAction:"pan-y",width:"100%",maxWidth:"var(--app-max-width)",margin:"0 auto"}}>
@@ -772,48 +956,49 @@
             <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
           </div>
 
-          {/* ── Publier sur Gist (côté organisateur) ── */}
+          {/* ── 1. SYNCHRONISER ── */}
           <div style={section}>
             <div style={sectionTitle}>
-              <span>💾 Publier sur Gist</span>
-              <button onClick={()=>setShowHelp(true)} title="Comment ça marche ?" style={{background:"none",border:`1px solid ${C.accent}55`,borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:700,padding:0}}>i</button>
+              <span>🔄 Synchroniser</span>
+              <button style={iBtn} onClick={()=>setShowWorkerHelp(true)}>i</button>
             </div>
-            <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6}}>Configuration</div>
-            <div style={{marginBottom:8}}>
-              <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>Gist ID</label>
-              <input style={inp} placeholder="ex: abc123def456..." value={settings.gistId||""} onChange={e=>onChange({...settings,gistId:e.target.value})}/>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.5}}>Récupère le planning depuis le Worker Cloudflare (lecture seule — pour les membres du voyage).</div>
+            <input style={inp} placeholder="https://mon-worker.mon-compte.workers.dev" value={settings.remoteUrl||""} onChange={e=>onChange({...settings,remoteUrl:e.target.value})}/>
+            <button onClick={()=>loadFromUrl(settings.remoteUrl)} disabled={!syncReady}
+              style={{width:"100%",marginTop:10,padding:"12px",borderRadius:9,background:syncReady?C.accent2:C.surface,border:`1px solid ${syncReady?C.accent2:C.border2}`,color:syncReady?C.onAccent:C.muted,fontSize:14,fontWeight:600,cursor:syncReady?"pointer":"not-allowed",opacity:syncReady?1:0.7}}>
+              🔄 Synchroniser maintenant
+            </button>
+          </div>
+
+          {/* ── 2. PUBLIER ── */}
+          <div style={section}>
+            <div style={sectionTitle}>
+              <span>📤 Publier les changements</span>
+              <button style={iBtn} onClick={()=>setShowWorkerHelp(true)}>i</button>
             </div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.5}}>Envoie ton planning vers le Worker Cloudflare pour le partager avec les autres.</div>
             <div style={{marginBottom:8}}>
-              <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>Token GitHub (fine-grained, scope Gist)</label>
+              <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>URL du Worker</label>
+              <input style={inp} placeholder="https://mon-worker.mon-compte.workers.dev" value={settings.workerUrl||""} onChange={e=>onChange({...settings,workerUrl:e.target.value})}/>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>Token secret (optionnel)</label>
               <div style={{position:"relative"}}>
-                <input type={showToken?"text":"password"} style={{...inp,paddingRight:60}} placeholder="github_pat_..." value={settings.gistToken||""} onChange={e=>onChange({...settings,gistToken:e.target.value})}/>
+                <input type={showToken?"text":"password"} style={{...inp,paddingRight:70}} placeholder="mon-token-secret" value={settings.workerToken||""} onChange={e=>onChange({...settings,workerToken:e.target.value})}/>
                 <button onClick={()=>setShowToken(!showToken)} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.accent,fontSize:11,cursor:"pointer",padding:"4px 8px"}}>{showToken?"Masquer":"Afficher"}</button>
               </div>
             </div>
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:11,color:C.muted,display:"block",marginBottom:4}}>Nom du fichier dans le gist</label>
-              <input style={inp} placeholder="voyage.json" value={settings.gistFilename||""} onChange={e=>onChange({...settings,gistFilename:e.target.value})}/>
-            </div>
-            <button onClick={publishToGist} disabled={!settings.gistId?.trim()||!settings.gistToken?.trim()} style={{width:"100%",padding:"12px",borderRadius:9,background:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.surface,border:`1px solid ${(settings.gistId?.trim()&&settings.gistToken?.trim())?C.accent:C.border2}`,color:(settings.gistId?.trim()&&settings.gistToken?.trim())?C.onAccent:C.muted,fontSize:14,fontWeight:600,cursor:(settings.gistId?.trim()&&settings.gistToken?.trim())?"pointer":"not-allowed",opacity:(settings.gistId?.trim()&&settings.gistToken?.trim())?1:0.7}}>📤 Publier maintenant</button>
+            <button onClick={publishToWorker} disabled={!workerReady}
+              style={{width:"100%",padding:"12px",borderRadius:9,background:workerReady?C.accent:C.surface,border:`1px solid ${workerReady?C.accent:C.border2}`,color:workerReady?C.onAccent:C.muted,fontSize:14,fontWeight:600,cursor:workerReady?"pointer":"not-allowed",opacity:workerReady?1:0.7}}>
+              📤 Publier maintenant
+            </button>
           </div>
 
-          {/* ── Import par lien (lecture) ── */}
-          <div style={section}>
-            <div style={sectionTitle}>
-              <span>🔗 Lien partagé (lecture)</span>
-            </div>
-            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.5}}>
-              Pour récupérer un planning publié par l'organisateur du voyage — colle ici l'URL raw du gist.
-            </div>
-            <input style={inp} placeholder="https://gist.githubusercontent.com/..." value={settings.remoteUrl||""} onChange={e=>onChange({...settings,remoteUrl:e.target.value})}/>
-            <button onClick={()=>loadFromUrl(settings.remoteUrl)} disabled={!settings.remoteUrl?.trim()} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:9,background:settings.remoteUrl?.trim()?`${C.accent}18`:C.surface2,border:`1px solid ${settings.remoteUrl?.trim()?C.accent:C.border2}`,color:settings.remoteUrl?.trim()?C.accent:C.muted,fontSize:13,fontWeight:600,cursor:settings.remoteUrl?.trim()?"pointer":"not-allowed",opacity:settings.remoteUrl?.trim()?1:0.7}}>🔄 Actualiser depuis le lien</button>
-          </div>
-
-          {/* ── Fichier local ── */}
+          {/* ── 3. FICHIER LOCAL ── */}
           <div style={section}>
             <div style={sectionTitle}>
               <span>📁 Fichier local</span>
-              <button onClick={()=>setShowLocalHelp(true)} title="À quoi servent ces boutons ?" style={{background:"none",border:`1px solid ${C.accent}55`,borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:700,padding:0}}>i</button>
+              <button style={iBtn} onClick={()=>setShowLocalHelp(true)}>i</button>
             </div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={exportData} style={{flex:1,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer"}}>📤 Exporter</button>
@@ -824,9 +1009,9 @@
             <button onClick={copyJson} style={{width:"100%",marginTop:8,padding:"11px",borderRadius:9,background:C.surface,border:`1px solid ${C.border2}`,color:C.text,fontSize:13,fontWeight:500,cursor:"pointer"}}>📋 Copier le JSON</button>
           </div>
 
-          {/* ── Affichage ── */}
+          {/* ── 4. AFFICHAGE ── */}
           <div style={section}>
-            <div style={sectionTitle}><span>🎨 Affichage des tuiles</span></div>
+            <div style={sectionTitle}><span>🎨 Affichage</span></div>
             <div style={{marginBottom:16}}>
               <div style={{...lbl,marginBottom:10}}>Thème</div>
               <div style={{display:"flex",gap:8}}>
@@ -847,7 +1032,7 @@
             </div>
           </div>
 
-          {/* ── Markdown cheat sheet ── */}
+          {/* ── AIDE MARKDOWN ── */}
           <div style={{padding:"10px 14px",borderRadius:10,background:`${C.accent}0c`,border:`1px solid ${C.accent}25`}}>
             <div style={{fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Aide markdown</div>
             <div style={{fontSize:12,color:C.muted,lineHeight:1.9}}>
@@ -859,62 +1044,97 @@
             </div>
           </div>
         </div>
-
-        {/* Help modals */}
-        {showHelp && <HelpLinkModal onClose={()=>setShowHelp(false)} safeBot={safeBot}/>}
-        {showLocalHelp && <HelpLocalModal onClose={()=>setShowLocalHelp(false)} safeBot={safeBot}/>}
+        {showWorkerHelp && <HelpWorkerModal onClose={()=>setShowWorkerHelp(false)} safeBot={safeBot}/>}
+        {showLocalHelp  && <HelpLocalModal  onClose={()=>setShowLocalHelp(false)}  safeBot={safeBot}/>}
       </div>
     );
   }
 
-  /* ════════ HELP LINK MODAL ════════ */
-  function HelpLinkModal({onClose, safeBot}) {
+  /* ════════ HELP WORKER MODAL ════════ */
+  function HelpWorkerModal({onClose, safeBot}) {
     const h={fontFamily:C.serif,fontSize:15,fontWeight:600,color:C.accent,margin:"16px 0 8px"};
     const p={fontSize:13,color:C.text,lineHeight:1.65,marginBottom:8};
-    const code={background:C.surface2,padding:"2px 6px",borderRadius:4,fontFamily:"monospace",fontSize:12,color:C.accent,border:`1px solid ${C.border}`,wordBreak:"break-all"};
-    const step={fontSize:13,color:C.text,lineHeight:1.65,marginBottom:10,paddingLeft:22,position:"relative"};
-    const num={position:"absolute",left:0,top:0,width:16,height:16,borderRadius:"50%",background:C.accent,color:C.onAccent,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"};
+    const code={background:C.surface2,padding:"3px 7px",borderRadius:4,fontFamily:"monospace",fontSize:12,color:C.accent,border:`1px solid ${C.border}`,wordBreak:"break-all",display:"inline-block"};
+    const block={background:C.surface2,padding:"10px 12px",borderRadius:8,fontFamily:"monospace",fontSize:11,color:C.accent,border:`1px solid ${C.border}`,wordBreak:"break-all",marginBottom:10,lineHeight:1.8,overflowX:"auto",whiteSpace:"pre"};
+    const step=(n,children)=>(
+      <div style={{fontSize:13,color:C.text,lineHeight:1.65,marginBottom:10,paddingLeft:26,position:"relative"}}>
+        <div style={{position:"absolute",left:0,top:1,width:18,height:18,borderRadius:"50%",background:C.accent,color:C.onAccent,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{n}</div>
+        {children}
+      </div>
+    );
     return (
       <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:60,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
         <div style={{background:C.surface,borderRadius:"20px 20px 0 0",border:`1px solid ${C.border}`,padding:`16px 20px calc(${safeBot} + 20px)`,maxHeight:"92svh",overflowY:"auto",touchAction:"pan-y",width:"100%",maxWidth:"var(--app-max-width)",margin:"0 auto"}}>
           <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 20px"}}/>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Publier sur Gist</div>
+            <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Configuration Cloudflare</div>
             <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
           </div>
-          <div style={p}>Cette fonction permet de publier ton planning directement sur ton Gist GitHub en un tap. Après publication, ta famille clique sur 🔄 Actualiser dans leur app pour récupérer la dernière version.</div>
 
-          <div style={h}>🔐 Pourquoi un token ?</div>
-          <div style={p}>Pour écrire sur ton gist, l'app a besoin d'un jeton d'authentification de ton compte GitHub. Ce token est stocké <strong>uniquement sur ton téléphone</strong> dans l'app, jamais envoyé ailleurs que sur GitHub.</div>
-          <div style={p}>Si tu utilises un <strong>fine-grained token</strong> limité à "Gists : read/write", le risque est minimal : même s'il était volé, il ne pourrait qu'éditer tes gists, rien d'autre.</div>
+          <div style={p}>Le Worker Cloudflare remplace GitHub Gist pour synchroniser ton planning. C'est gratuit et plus rapide.</div>
 
-          <div style={h}>📝 Étape 1 — Créer le Gist (1 fois)</div>
-          <div style={step}><span style={num}>1</span>Va sur <span style={code}>gist.github.com</span> (crée un compte gratuit si besoin)</div>
-          <div style={step}><span style={num}>2</span>Nom du fichier : <span style={code}>voyage.json</span></div>
-          <div style={step}><span style={num}>3</span>Contenu : mets juste <span style={code}>{"{}"}</span> — il sera écrasé dès ta première publication</div>
-          <div style={step}><span style={num}>4</span>Clique sur <strong>"Create secret gist"</strong> (recommandé pour confidentialité)</div>
-          <div style={step}><span style={num}>5</span>Dans l'URL de la page du gist, copie le long ID après ton nom d'utilisateur (ex: <span style={code}>abc123def456...</span>) — c'est ton <strong>Gist ID</strong>, à coller plus bas</div>
+          <div style={{padding:"10px 12px",borderRadius:8,background:`${C.accent2}10`,border:`1px solid ${C.accent2}30`,marginBottom:14}}>
+            <div style={{fontSize:12,color:C.accent2,fontWeight:600}}>⏱ Temps de mise en place : environ 15 minutes</div>
+          </div>
 
-          <div style={h}>🔑 Étape 2 — Créer le Token (1 fois)</div>
-          <div style={step}><span style={num}>1</span>Sur GitHub, clique sur ton avatar → <strong>Settings</strong></div>
-          <div style={step}><span style={num}>2</span>Tout en bas à gauche → <strong>Developer settings</strong></div>
-          <div style={step}><span style={num}>3</span><strong>Personal access tokens</strong> → <strong>Fine-grained tokens</strong> → <strong>Generate new token</strong></div>
-          <div style={step}><span style={num}>4</span>Nom : "Voyage App", expiration : 1 an</div>
-          <div style={step}><span style={num}>5</span>Dans <strong>Account permissions</strong>, cherche <strong>Gists</strong> → sélectionne <strong>Read and write</strong></div>
-          <div style={step}><span style={num}>6</span>Clique <strong>Generate token</strong> et <strong>copie le token immédiatement</strong> (il commence par <span style={code}>github_pat_</span>)</div>
+          <div style={h}>① Créer un compte Cloudflare</div>
+          {step(1,<span>Va sur <code style={code}>cloudflare.com</code> → <strong>Sign up</strong> (gratuit, pas de carte bancaire requise)</span>)}
 
-          <div style={h}>⚙️ Étape 3 — Configurer l'app</div>
-          <div style={step}><span style={num}>1</span>Colle le <strong>Gist ID</strong> dans le champ Configuration</div>
-          <div style={step}><span style={num}>2</span>Colle le <strong>Token</strong></div>
-          <div style={step}><span style={num}>3</span>Laisse <span style={code}>voyage.json</span> comme nom de fichier</div>
-          <div style={step}><span style={num}>4</span>Clique sur <strong>📤 Publier maintenant</strong> à chaque fois que tu veux mettre à jour</div>
+          <div style={h}>② Créer le Worker et le stockage KV</div>
+          {step(1,<span>Dans le dashboard Cloudflare → menu gauche → <strong>Workers & Pages</strong> → <strong>Create</strong></span>)}
+          {step(2,<span>Choisis <strong>"Hello World"</strong> comme template, nomme-le <code style={code}>planning-voyage</code></span>)}
+          {step(3,<span>Clique <strong>Deploy</strong> — ton Worker est créé avec une URL comme <code style={code}>planning-voyage.TON-COMPTE.workers.dev</code></span>)}
+          {step(4,<span>Dans le dashboard → <strong>KV</strong> → <strong>Create a namespace</strong> → nomme-le <code style={code}>PLANNING_KV</code></span>)}
+          {step(5,<span>Retourne sur ton Worker → <strong>Settings</strong> → <strong>Bindings</strong> → <strong>Add binding</strong> → KV Namespace → Variable : <code style={code}>KV</code> → Namespace : <code style={code}>PLANNING_KV</code> → <strong>Save</strong></span>)}
 
-          <div style={h}>📲 URL à donner à ta famille</div>
-          <div style={p}>Construis manuellement cette URL (elle pointe toujours vers la dernière version, contrairement au bouton "Raw" de GitHub qui donne une URL figée) :</div>
-          <div style={{...code,display:"block",padding:"8px 10px",marginBottom:12}}>https://gist.githubusercontent.com/TON_USERNAME/TON_GIST_ID/raw/voyage.json</div>
-          <div style={p}>Remplace <strong>TON_USERNAME</strong> par ton nom d'utilisateur GitHub et <strong>TON_GIST_ID</strong> par l'ID du gist. Envoie cette URL à ta famille — elle ne change jamais.</div>
-          <div style={p}>Dans leur app, ils la collent dans la section <strong>🔗 Lien partagé (lecture)</strong> et cliquent sur 🔄 Actualiser. Ils n'ont pas besoin de token.</div>
-          <div style={p}><em>Note : après publication, il peut y avoir un délai de quelques minutes avant que les changements soient visibles côté famille (cache GitHub).</em></div>
+          <div style={h}>③ Coller le code du Worker</div>
+          {step(1,<span>Dans ton Worker → onglet <strong>Edit Code</strong> → remplace tout le contenu par ce code :</span>)}
+          <div style={block}>{`export default {
+  async fetch(request, env) {
+    const token = env.AUTH_TOKEN;
+    const url   = new URL(request.url);
+
+    // CORS — autorise l'app à appeler le Worker
+    const cors = {
+      "Access-Control-Allow-Origin":  "*",
+      "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, X-Auth-Token",
+    };
+    if (request.method === "OPTIONS")
+      return new Response(null, { headers: cors });
+
+    // GET /planning — lecture (sans token)
+    if (request.method === "GET" && url.pathname === "/planning") {
+      const data = await env.KV.get("planning");
+      if (!data) return new Response("{}", { headers: cors });
+      return new Response(data, {
+        headers: { ...cors, "Content-Type": "application/json" }
+      });
+    }
+
+    // PUT /planning — écriture (token requis)
+    if (request.method === "PUT" && url.pathname === "/planning") {
+      if (token && request.headers.get("X-Auth-Token") !== token)
+        return new Response("Unauthorized", { status: 401, headers: cors });
+      const body = await request.text();
+      await env.KV.put("planning", body);
+      return new Response("OK", { headers: cors });
+    }
+
+    return new Response("Not found", { status: 404, headers: cors });
+  }
+};`}</div>
+          {step(2,<span>Clique <strong>Deploy</strong></span>)}
+
+          <div style={h}>④ Ajouter un token secret (optionnel mais recommandé)</div>
+          {step(1,<span>Dans ton Worker → <strong>Settings</strong> → <strong>Variables</strong> → <strong>Add variable</strong></span>)}
+          {step(2,<span>Nom : <code style={code}>AUTH_TOKEN</code> · Valeur : un mot de passe de ton choix → <strong>Save</strong></span>)}
+          {step(3,<span>Note ce mot de passe — tu le mettras dans le champ "Token secret" ci-dessus</span>)}
+
+          <div style={h}>⑤ Configurer l'app</div>
+          {step(1,<span><strong>Synchroniser</strong> et <strong>URL du Worker</strong> : colle <code style={code}>https://planning-voyage.TON-COMPTE.workers.dev</code></span>)}
+          {step(2,<span><strong>Token secret</strong> : le mot de passe défini à l'étape ④</span>)}
+          {step(3,<span>Pour ta famille : donne-leur uniquement l'URL du Worker dans la section <strong>Synchroniser</strong> — pas besoin de token pour lire</span>)}
 
           <button onClick={onClose} style={{width:"100%",marginTop:16,padding:"12px",borderRadius:10,background:C.accent,border:"none",color:C.onAccent,fontSize:14,fontWeight:600,cursor:"pointer"}}>J'ai compris</button>
         </div>
@@ -934,17 +1154,13 @@
             <div style={{fontFamily:C.serif,fontSize:18,fontWeight:600,color:C.text}}>Fichier local</div>
             <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
           </div>
-          <div style={p}>Les 3 boutons de cette section permettent de manipuler ton planning comme un fichier JSON. Utile si tu ne passes pas par Gist, ou pour faire une sauvegarde locale.</div>
-
+          <div style={p}>Les 3 boutons permettent de manipuler ton planning comme un fichier JSON.</div>
           <div style={h}>📤 Exporter</div>
-          <div style={p}>Télécharge ton planning actuel sous forme de fichier <strong>.json</strong>. Le fichier arrive dans tes Téléchargements (ou ce que tu auras choisi). Pratique pour faire une sauvegarde ou pour l'envoyer à quelqu'un via WhatsApp, email, AirDrop, etc.</div>
-
+          <div style={p}>Télécharge ton planning en fichier <strong>.json</strong>. Pratique pour sauvegarder ou partager.</div>
           <div style={h}>📥 Importer</div>
-          <div style={p}>Charge un fichier <strong>.json</strong> de planning dans l'app. <strong>Attention</strong> : cela <strong>écrase complètement</strong> ton planning actuel. À utiliser si tu reçois un planning de quelqu'un ou si tu veux restaurer une sauvegarde.</div>
-
+          <div style={p}>Charge un fichier <strong>.json</strong>. <strong>Attention</strong> : cela écrase complètement le planning actuel.</div>
           <div style={h}>📋 Copier le JSON</div>
-          <div style={p}>Copie le contenu JSON de ton planning dans le presse-papiers de ton appareil. Tu peux ensuite le coller où tu veux (note, message, éditeur de texte, ou directement sur gist.github.com si tu préfères publier manuellement).</div>
-
+          <div style={p}>Copie le contenu JSON dans le presse-papiers pour coller ailleurs.</div>
           <button onClick={onClose} style={{width:"100%",marginTop:16,padding:"12px",borderRadius:10,background:C.accent,border:"none",color:C.onAccent,fontSize:14,fontWeight:600,cursor:"pointer"}}>J'ai compris</button>
         </div>
       </div>
@@ -958,9 +1174,7 @@
     const notesRef    = useRef(null);
     const contentRef  = useRef(null);
     const onFocus = ref => { focusedRef.current = ref.current; };
-
     const [newTodo, setNewTodo] = useState("");
-
     const isEdit   = !!modal.item;
     const inp      = {width:"100%",padding:"11px 13px",borderRadius:10,background:C.surface2,border:`1px solid ${C.border2}`,color:C.text,fontSize:16,outline:"none"};
     const ta       = {...inp,resize:"vertical",minHeight:110,lineHeight:1.65};
@@ -987,11 +1201,11 @@
             <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
           </div>
 
-          {/* ── DAY FORM ── */}
+          {/* DAY FORM */}
           {modal.type==="day"&&(
             <div style={{display:"flex",flexDirection:"column",gap:16}}>
               <div>
-                <label style={lbl}>Couleur de la tuile</label>
+                <label style={lbl}>Couleur de la ligne</label>
                 <ColorPicker value={form.color} onChange={v=>setForm({...form,color:v})}/>
               </div>
               <div>
@@ -1015,10 +1229,9 @@
             </div>
           )}
 
-          {/* ── CARD FORM ── */}
+          {/* CARD FORM */}
           {modal.type==="card"&&(
             <div style={{display:"flex",flexDirection:"column",gap:16}}>
-              {/* Type selector */}
               <div>
                 <label style={lbl}>Type de tuile</label>
                 <div style={{display:"flex",gap:8}}>
@@ -1066,7 +1279,7 @@
             </div>
           )}
 
-          {/* ── TRIP FORM ── */}
+          {/* TRIP FORM */}
           {modal.type==="trip"&&(
             <div style={{display:"flex",flexDirection:"column",gap:16}}>
               <div><label style={lbl}>Nom du voyage</label><input style={inp} placeholder="Voyage au Japon 🗾" value={form.name||""} onChange={e=>setForm({...form,name:e.target.value})}/></div>
@@ -1094,6 +1307,15 @@
 
   const root = ReactDOM.createRoot(document.getElementById("root"));
   root.render(<App/>);
+</script>
+
+<script>
+  /* ── Service Worker ── */
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js")
+      .then(reg => console.log("[PWA] Service worker enregistré ✓", reg.scope))
+      .catch(err => console.warn("[PWA] Erreur service worker :", err));
+  }
 </script>
 </body>
 </html>
