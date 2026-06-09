@@ -351,8 +351,9 @@
     const loadFromUrl = async (url) => {
       if(!url || !url.trim()){ showToast("⚠️ Aucune URL configurée"); return; }
       showToast("⏳ Synchronisation...");
+      const finalUrl = url.trim().replace(/\/$/, "") + "/planning";
       try {
-        const res = await fetch(url.trim(), { cache:"no-store" });
+        const res = await fetch(finalUrl, { cache:"no-store" });
         if(!res.ok) throw new Error("HTTP "+res.status);
         const p = await res.json();
         if(!Array.isArray(p.days)||!Array.isArray(p.cards)) throw new Error("format");
